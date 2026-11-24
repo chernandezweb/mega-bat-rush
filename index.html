@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#3b82f6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>MEGA BAT RUSH — Infinite Home Run</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Lilita+One&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- TOP HUD -->
+    <div id="top-hud">
+      <div class="currency-row">
+        <div class="currency-pill coin-pill" id="coin-pill">
+          <span class="coin-icon">C</span>
+          <span class="currency-val" id="coin-count">100</span>
+        </div>
+        <div class="currency-pill gem-pill" id="gem-pill">
+          <span class="gem-icon">◆</span>
+          <span class="currency-val" id="gem-count">25</span>
+        </div>
+      </div>
+
+      <div class="record-badge" id="record-badge">
+        <span class="record-crown">👑</span>
+        <span>BEST: <strong id="best-distance">0m</strong></span>
+        <span class="combo-pill hidden" id="combo-pill">🔥 x1</span>
+      </div>
+    </div>
+
+    <!-- LEFT SIDE CONTROLS -->
+    <div id="left-buttons">
+      <button class="side-btn settings-btn" id="btn-settings" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+          <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.02 7.02 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/>
+        </svg>
+      </button>
+      <button class="side-btn powerup-btn" id="btn-powerups" aria-label="Powerups" title="Powerups">
+        <span class="side-emoji">⚡</span>
+        <span class="side-tag">BOOST</span>
+        <span class="badge-dot hidden" id="powerup-active-dot"></span>
+      </button>
+    </div>
+
+    <!-- RIGHT SIDE CONTROLS -->
+    <div id="right-buttons">
+      <button class="side-btn quest-btn" id="btn-quests" aria-label="Missions" title="Missions">
+        <span class="side-emoji">📋</span>
+        <span class="quest-check hidden" id="quest-badge">✓</span>
+      </button>
+      <button class="side-btn shop-btn" id="btn-shop" aria-label="Shop" title="Shop">
+        <span class="side-emoji">🛒</span>
+      </button>
+    </div>
+
+    <!-- ACTIVE POWERUPS STRIP -->
+    <div id="active-powerups-strip"></div>
+
+    <!-- CENTER GAMEPLAY OVERLAYS -->
+    <div id="tap-start-prompt">
+      <div class="tap-start-text">tap start</div>
+      <div class="tap-sub-text">TAP AGAIN WHEN THE BALL HITS THE RING!</div>
+    </div>
+
+    <!-- SWING TIMING METER (shown during pitch) -->
+    <div id="timing-hud" class="hidden">
+      <div class="pitch-type-badge" id="pitch-type-badge">FASTBALL</div>
+      <div class="timing-bar-wrap">
+        <div class="timing-bar-track">
+          <div class="timing-zone-good"></div>
+          <div class="timing-zone-great"></div>
+          <div class="timing-zone-perfect"></div>
+          <div class="timing-cursor" id="timing-cursor"></div>
+        </div>
+        <div class="timing-label">TAP TO SWING!</div>
+      </div>
+    </div>
+
+    <!-- FLIGHT HUD (shown while ball is flying) -->
+    <div id="flight-hud" class="hidden">
+      <div class="flight-distance-wrap">
+        <div class="flight-distance" id="flight-distance">0m</div>
+        <div class="flight-sub-row">
+          <span class="flight-speed" id="flight-speed">0 mph</span>
+          <span class="flight-zone" id="flight-zone">CITY PARK</span>
+        </div>
+      </div>
+      <div class="flight-coins-live" id="flight-coins-live">+0 🪙</div>
+      <div class="slam-prompt" id="slam-prompt">
+        <div class="slam-bar-bg"><div class="slam-bar-fill" id="slam-bar-fill"></div></div>
+        <span id="slam-text">⚡ TAP FOR POWER SLAM!</span>
+      </div>
+    </div>
+
+    <!-- FLOATING CALLOUTS (PERFECT!, NEW RECORD!, +50 COINS, BOING!) -->
+    <div id="callout-layer"></div>
+
+    <!-- RESULT OVERLAY -->
+    <div id="result-overlay" class="hidden">
+      <div class="result-card">
+        <div class="result-new-record hidden" id="result-new-record">★ NEW RECORD! ★</div>
+        <div class="result-quality" id="result-quality">PERFECT HIT!</div>
+        <div class="result-dist-num" id="result-dist-num">245m</div>
+        <div class="result-stats-grid">
+          <div class="result-stat">
+            <span class="r-label">MAX HEIGHT</span>
+            <span class="r-val" id="result-height">42m</span>
+          </div>
+          <div class="result-stat">
+            <span class="r-label">BOUNCES</span>
+            <span class="r-val" id="result-bounces">6</span>
+          </div>
+          <div class="result-stat">
+            <span class="r-label">BONUS HITS</span>
+            <span class="r-val" id="result-bonuses">3</span>
+          </div>
+        </div>
+        <div class="result-reward-box">
+          <div class="reward-line">
+            <span class="coin-icon sm">C</span>
+            <span class="reward-amount" id="result-coins">+320</span>
+          </div>
+          <div class="reward-line gem-reward hidden" id="result-gem-line">
+            <span class="gem-icon sm">◆</span>
+            <span class="reward-amount" id="result-gems">+5</span>
+          </div>
+        </div>
+        <div class="result-actions">
+          <button class="btn-bonus-2x" id="btn-bonus-2x">
+            <span>⚡ 2X COINS SPIN!</span>
+          </button>
+          <button class="btn-continue" id="btn-continue">NEXT AT-BAT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM 3 COMIC UPGRADE CARDS -->
+    <div id="upgrade-dock">
+      <button class="upgrade-card card-bat" id="upg-bat">
+        <div class="card-lv-badge">Lv <span id="lv-bat">1</span></div>
+        <div class="card-title">Bat</div>
+        <div class="card-art">🏏</div>
+        <div class="card-tier-name" id="tier-bat">Wood</div>
+        <div class="card-dots" id="dots-bat"></div>
+        <div class="card-buy-btn btn-blue" id="buy-bat">
+          <span class="coin-icon xs">C</span>
+          <span id="cost-bat">25</span>
+        </div>
+      </button>
+
+      <button class="upgrade-card card-muscle" id="upg-muscle">
+        <div class="card-lv-badge">Lv <span id="lv-muscle">1</span></div>
+        <div class="card-title">Muscle</div>
+        <div class="card-art">💪</div>
+        <div class="card-tier-name" id="tier-muscle">Rookie</div>
+        <div class="card-dots" id="dots-muscle"></div>
+        <div class="card-buy-btn btn-red" id="buy-muscle">
+          <span class="coin-icon xs">C</span>
+          <span id="cost-muscle">25</span>
+        </div>
+      </button>
+
+      <button class="upgrade-card card-income" id="upg-income">
+        <div class="card-lv-badge">Lv <span id="lv-income">1</span></div>
+        <div class="card-title">Income</div>
+        <div class="card-art">💰</div>
+        <div class="card-mult-tag" id="mult-income">×1.0</div>
+        <div class="card-dots" id="dots-income"></div>
+        <div class="card-buy-btn btn-gold" id="buy-income">
+          <span class="coin-icon xs">C</span>
+          <span id="cost-income">25</span>
+        </div>
+      </button>
+    </div>
+
+    <!-- MODALS -->
+    <div id="modal-backdrop" class="hidden">
+      <!-- POWERUPS MODAL -->
+      <div class="modal-panel hidden" id="modal-powerups">
+        <div class="modal-header">
+          <h2>⚡ POWERUPS</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <p class="modal-desc">Activate boosts for your next mega swing!</p>
+        <div class="powerup-list" id="powerup-list"></div>
+      </div>
+
+      <!-- SHOP MODAL -->
+      <div class="modal-panel hidden" id="modal-shop">
+        <div class="modal-header">
+          <h2>🛒 PRO SHOP</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="bats">Bats</button>
+          <button class="shop-tab" data-tab="helmets">Helmets</button>
+          <button class="shop-tab" data-tab="trails">Trails</button>
+          <button class="shop-tab" data-tab="skins">Batter</button>
+        </div>
+        <div class="shop-grid" id="shop-grid"></div>
+      </div>
+
+      <!-- MISSIONS MODAL -->
+      <div class="modal-panel hidden" id="modal-quests">
+        <div class="modal-header">
+          <h2>📋 MISSIONS</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <p class="modal-desc">Complete infinite challenges to earn Gems!</p>
+        <div class="quest-list" id="quest-list"></div>
+      </div>
+
+      <!-- SETTINGS MODAL -->
+      <div class="modal-panel hidden" id="modal-settings">
+        <div class="modal-header">
+          <h2>⚙️ SETTINGS</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <div class="settings-list">
+          <label class="setting-row">
+            <span>🔊 Sound Effects</span>
+            <input type="checkbox" id="toggle-sound" checked />
+          </label>
+          <label class="setting-row">
+            <span>📳 Haptic Vibration</span>
+            <input type="checkbox" id="toggle-haptics" checked />
+          </label>
+          <div class="settings-stats" id="settings-stats"></div>
+          <button class="btn-danger" id="btn-reset-save">Reset All Progress</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
