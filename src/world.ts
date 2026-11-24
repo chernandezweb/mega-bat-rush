@@ -581,7 +581,7 @@ export class GameWorld {
     this.batter.swingPivot = swingPivot;
 
     const batPivot = new THREE.Group();
-    batPivot.position.set(0.3, 0.04, 0.16);
+    batPivot.position.set(-0.28, 0.02, 0.24);
     swingPivot.add(batPivot);
     this.batter.batPivot = batPivot;
 

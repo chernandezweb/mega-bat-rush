@@ -717,17 +717,17 @@ export class BaseballGame {
     b.rightLeg.hip.rotation.set(-0.22, 0, 0.18);
     b.rightLeg.knee.rotation.set(0.32, 0, 0);
 
-    // Arms held close to back shoulder gripping the bat handle
-    b.rightArm.shoulder.rotation.set(-0.75, -0.3, 0.35);
-    b.rightArm.elbow.rotation.set(-1.35, 0, 0);
-    b.leftArm.shoulder.rotation.set(-0.85, 0.72, -0.18);
-    b.leftArm.elbow.rotation.set(-1.15, 0, 0);
+    // Righty batter: hands tucked near back (right, -X) shoulder, arms bent cleanly
+    b.leftArm.shoulder.rotation.set(-0.95, 0.25, -0.45);
+    b.leftArm.elbow.rotation.set(-1.3, 0, 0);
+    b.rightArm.shoulder.rotation.set(-0.85, -0.55, 0.3);
+    b.rightArm.elbow.rotation.set(-1.15, 0, 0);
 
-    // Bat rests UP and angled back over right shoulder (behind batter, clear of face!)
+    // Bat held behind righty batter's back shoulder, barrel angled UP and LEFT-BACK (clear of head!)
     if (b.swingPivot && b.batPivot) {
       b.swingPivot.rotation.set(0, 0, 0);
-      b.batPivot.position.set(0.3, 0.04, 0.16);
-      b.batPivot.rotation.set(-0.48 + waggle, 0, -0.58);
+      b.batPivot.position.set(-0.28, 0.02, 0.24);
+      b.batPivot.rotation.set(-0.95 + waggle, 0, 0.38);
     }
   }
 
@@ -735,7 +735,7 @@ export class BaseballGame {
     const b = this.world.batter;
     b.hips.position.y = 0.84;
     b.hips.rotation.set(0.1, -0.15 * p, 0);
-    b.torsoGroup.rotation.set(0.1, -0.3 * p - 0.18, 0);
+    b.torsoGroup.rotation.set(0.1, -0.28 * p - 0.18, 0);
     b.headGroup.rotation.set(0, 1.02, 0);
 
     b.leftLeg.hip.rotation.set(-0.28 - 0.16 * p, 0, -0.2);
@@ -743,27 +743,27 @@ export class BaseballGame {
     b.rightLeg.hip.rotation.set(-0.25, 0, 0.2);
     b.rightLeg.knee.rotation.set(0.38, 0, 0);
 
-    b.rightArm.shoulder.rotation.set(-0.85, -0.4 * p, 0.45);
-    b.rightArm.elbow.rotation.set(-1.42, 0, 0);
-    b.leftArm.shoulder.rotation.set(-0.92, 0.78, -0.15);
-    b.leftArm.elbow.rotation.set(-1.1, 0, 0);
+    b.leftArm.shoulder.rotation.set(-1.02, 0.35 * p + 0.25, -0.5);
+    b.leftArm.elbow.rotation.set(-1.35, 0, 0);
+    b.rightArm.shoulder.rotation.set(-0.9, -0.62, 0.35);
+    b.rightArm.elbow.rotation.set(-1.15, 0, 0);
 
+    // Cock bat slightly further back behind shoulder ready to whip!
     if (b.swingPivot && b.batPivot) {
-      b.swingPivot.rotation.set(0, -0.22 * p, 0);
-      b.batPivot.position.set(0.32, 0.06, 0.14);
-      b.batPivot.rotation.set(-0.56 - 0.14 * p, 0, -0.72);
+      b.swingPivot.rotation.set(0, -0.24 * p, 0);
+      b.batPivot.position.set(-0.32, 0.05, 0.22);
+      b.batPivot.rotation.set(-1.08 - 0.12 * p, 0, 0.48);
     }
   }
 
   private poseBatterSwing(p: number): void {
     const b = this.world.batter;
     const ease = 1 - Math.pow(1 - p, 3);
-    // Smooth horizontal bat level-out at impact (p ~ 0.45) then high follow-through!
     const levelOut = Math.sin(Math.min(1, p * 1.15) * Math.PI);
 
     b.hips.position.y = 0.85;
     b.hips.rotation.set(0.06, THREE.MathUtils.lerp(-0.15, 0.85, ease), 0);
-    b.torsoGroup.rotation.set(0.05, THREE.MathUtils.lerp(-0.48, 0.95, ease), 0);
+    b.torsoGroup.rotation.set(0.05, THREE.MathUtils.lerp(-0.46, 0.95, ease), 0);
     b.headGroup.rotation.set(0, THREE.MathUtils.lerp(1.02, -0.35, ease), 0);
 
     b.leftLeg.hip.rotation.set(-0.12, 0, -0.16);
@@ -771,28 +771,32 @@ export class BaseballGame {
     b.rightLeg.hip.rotation.set(0.15 * ease, 0.45 * ease, 0.18);
     b.rightLeg.knee.rotation.set(0.35, 0, 0);
 
-    b.rightArm.shoulder.rotation.set(
-      THREE.MathUtils.lerp(-0.85, -1.45, ease),
-      THREE.MathUtils.lerp(-0.4, 0.85, ease),
-      THREE.MathUtils.lerp(0.45, -0.45, ease)
-    );
-    b.rightArm.elbow.rotation.set(THREE.MathUtils.lerp(-1.4, -0.35, levelOut), 0, 0);
-
     b.leftArm.shoulder.rotation.set(
-      THREE.MathUtils.lerp(-0.92, -1.45, ease),
-      THREE.MathUtils.lerp(0.78, -0.65, ease),
-      THREE.MathUtils.lerp(-0.15, -0.55, ease)
+      THREE.MathUtils.lerp(-1.02, -1.45, ease),
+      THREE.MathUtils.lerp(0.6, -0.85, ease),
+      THREE.MathUtils.lerp(-0.5, 0.35, ease)
     );
-    b.leftArm.elbow.rotation.set(THREE.MathUtils.lerp(-1.1, -0.3, levelOut), 0, 0);
+    b.leftArm.elbow.rotation.set(THREE.MathUtils.lerp(-1.35, -0.35, levelOut), 0, 0);
 
-    // True horizontal baseball swing arc around chest pivot!
+    b.rightArm.shoulder.rotation.set(
+      THREE.MathUtils.lerp(-0.9, -1.4, ease),
+      THREE.MathUtils.lerp(-0.62, 0.75, ease),
+      THREE.MathUtils.lerp(0.35, 0.5, ease)
+    );
+    b.rightArm.elbow.rotation.set(THREE.MathUtils.lerp(-1.15, -0.3, levelOut), 0, 0);
+
+    // True righty horizontal swing: from back shoulder (-X) -> across plate (+Z) -> front follow-through (+X)!
     if (b.swingPivot && b.batPivot) {
-      b.swingPivot.rotation.set(0.18 * levelOut, THREE.MathUtils.lerp(-0.22, 1.85, ease), 0);
-      b.batPivot.position.set(0.32, 0.06, THREE.MathUtils.lerp(0.14, 0.34, levelOut));
+      b.swingPivot.rotation.set(0.16 * levelOut, THREE.MathUtils.lerp(-0.24, 2.0, ease), 0);
+      b.batPivot.position.set(
+        THREE.MathUtils.lerp(-0.32, -0.1, levelOut),
+        0.04,
+        THREE.MathUtils.lerp(0.22, 0.4, levelOut)
+      );
       b.batPivot.rotation.set(
-        THREE.MathUtils.lerp(-0.7, 1.38, Math.min(1, p * 2.2)),
+        THREE.MathUtils.lerp(-1.15, 1.42, Math.min(1, p * 2.1)),
         0,
-        THREE.MathUtils.lerp(-0.72, 0.35, ease)
+        THREE.MathUtils.lerp(0.48, -0.35, ease)
       );
     }
   }
