@@ -146,11 +146,11 @@ export class GameWorld {
 
   constructor(canvas: HTMLCanvasElement, save: GameSave) {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x93c5fd, 85, 260);
+    this.scene.fog = new THREE.Fog(0x93c5fd, 130, 520);
 
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(56, w / h, 0.1, 420);
+    this.camera = new THREE.PerspectiveCamera(56, w / h, 0.1, 1400);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -232,7 +232,7 @@ export class GameWorld {
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.repeat.set(6, 2);
 
-    const skyGeo = new THREE.SphereGeometry(320, 24, 16);
+    const skyGeo = new THREE.SphereGeometry(700, 24, 16);
     const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
     this.skyMesh = new THREE.Mesh(skyGeo, skyMat);
     this.scene.add(this.skyMesh);
@@ -1038,7 +1038,7 @@ export class GameWorld {
   public ensureChunksAround(ballZ: number, extraPads = false): void {
     const centerIdx = Math.floor(-ballZ / CHUNK_LEN);
     const minIdx = Math.max(-1, centerIdx - 2);
-    const maxIdx = centerIdx + 5;
+    const maxIdx = centerIdx + 8;
 
     for (const [idx, chunk] of this.chunks.entries()) {
       if (idx < minIdx - 1 || idx > maxIdx + 2) {
@@ -1473,7 +1473,8 @@ export class GameWorld {
   }
 
   public updateEffects(dt: number, time: number, focusZ: number): void {
-    this.skyMesh.position.set(0, 0, focusZ);
+    // Keep sky dome centered on camera Y & Z so the ball can NEVER fly out of the skybox!
+    this.skyMesh.position.set(0, Math.max(0, this.camera.position.y * 0.85), focusZ);
     this.sunLight.position.set(16, 32, focusZ + 18);
     this.sunLight.target.position.set(0, 0, focusZ - 10);
 

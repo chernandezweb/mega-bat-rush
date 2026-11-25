@@ -635,9 +635,12 @@ export class BaseballGame {
         (this.runActivePowerups.lowgrav ? 0.78 : 1.0) *
         (activeSet?.id === 'cosmic' ? 0.78 : 1.0);
 
-      // Gravity & realistic air drag
+      // Gravity & realistic air drag (plus smooth aerodynamic ceiling above 55m so the city stays visible!)
       const gravity = this.isSlamming ? 42 : 24.5 * glideFactor;
       this.ballVel.y -= gravity * dt;
+      if (this.ballPos.y > 55 && this.ballVel.y > 0) {
+        this.ballVel.y *= Math.pow(0.18, dt);
+      }
       this.ballVel.z *= Math.pow(0.89, dt);
 
       // Active mid-air steering!
@@ -867,16 +870,16 @@ export class BaseballGame {
       const speed = Math.abs(this.ballVel.z);
       const targetCam = new THREE.Vector3(
         this.ballPos.x * 0.45,
-        Math.max(3.2, this.ballPos.y * 0.62 + 3.4),
-        this.ballPos.z + 9.2 + Math.min(4.0, speed * 0.07)
+        Math.min(78, Math.max(3.2, this.ballPos.y * 0.68 + 3.4)),
+        this.ballPos.z + 9.2 + Math.min(5.0, speed * 0.06)
       );
-      this.camPos.lerp(targetCam, Math.min(1, dt * 6.5));
+      this.camPos.lerp(targetCam, Math.min(1, dt * 7.5));
       const targetLook = new THREE.Vector3(
         this.ballPos.x * 0.6,
-        Math.max(1.1, this.ballPos.y * 0.72),
-        this.ballPos.z - 9
+        Math.min(68, Math.max(1.1, this.ballPos.y * 0.72)),
+        this.ballPos.z - 12
       );
-      this.camLook.lerp(targetLook, Math.min(1, dt * 8));
+      this.camLook.lerp(targetLook, Math.min(1, dt * 8.5));
 
       const targetFov = THREE.MathUtils.clamp(56 + speed * 0.22, 56, 70);
       this.world.camera.fov = THREE.MathUtils.lerp(this.world.camera.fov, targetFov, dt * 4);
