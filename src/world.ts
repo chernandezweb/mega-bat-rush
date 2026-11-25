@@ -149,7 +149,7 @@ export class GameWorld {
 
   constructor(canvas: HTMLCanvasElement, save: GameSave) {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x93c5fd, 130, 520);
+    this.scene.fog = new THREE.Fog(0x60a5fa, 120, 480);
 
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
@@ -165,12 +165,12 @@ export class GameWorld {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap; // soft since r182
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.82;
 
-    // Studio IBL environment reflections so metallic bats, crowns, helmets, and car windows gleam!
+    // Subtle studio IBL reflections without washing out diffuse contrast!
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.55;
+    this.scene.environmentIntensity = 0.28;
     pmrem.dispose();
 
     this.loadStylizedTextures();
@@ -197,10 +197,10 @@ export class GameWorld {
   }
 
   private setupLighting(): void {
-    const hemi = new THREE.HemisphereLight(0xdbeafe, 0x4ade80, 0.98);
+    const hemi = new THREE.HemisphereLight(0x93c5fd, 0x166534, 0.48);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight(0xfffbeb, 1.35);
+    const sun = new THREE.DirectionalLight(0xfff7ed, 1.55);
     sun.position.set(16, 32, 18);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -226,16 +226,16 @@ export class GameWorld {
     for (let y = 0; y < 512; y += tile) {
       for (let x = 0; x < 512; x += tile) {
         const isEven = (x / tile + y / tile) % 2 === 0;
-        ctx.fillStyle = isEven ? '#7db7f8' : '#b7d8fc';
+        ctx.fillStyle = isEven ? '#4f93e8' : '#7eb6f7';
         ctx.fillRect(x, y, tile, tile);
       }
     }
-    const grad = ctx.createLinearGradient(0, 260, 0, 512);
-    grad.addColorStop(0, 'rgba(224,242,254,0)');
-    grad.addColorStop(0.65, 'rgba(224,242,254,0.65)');
-    grad.addColorStop(1, 'rgba(240,249,255,0.95)');
+    const grad = ctx.createLinearGradient(0, 270, 0, 512);
+    grad.addColorStop(0, 'rgba(147,197,253,0)');
+    grad.addColorStop(0.7, 'rgba(147,197,253,0.45)');
+    grad.addColorStop(1, 'rgba(191,219,254,0.8)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 260, 512, 252);
+    ctx.fillRect(0, 270, 512, 242);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
@@ -283,14 +283,14 @@ export class GameWorld {
     this.sharedMat.grass.color.setHex(0xffffff);
     this.sharedMat.grass.needsUpdate = true;
 
-    // Seamless stylized concrete park sidewalk slabs
+    // Seamless stylized concrete park sidewalk slabs (rich medium slate tint for high ball contrast!)
     const walkTex = loader.load('./textures/walkway.jpg');
     walkTex.wrapS = THREE.RepeatWrapping;
     walkTex.wrapT = THREE.RepeatWrapping;
     walkTex.repeat.set(2, 12);
     walkTex.colorSpace = THREE.SRGBColorSpace;
     this.sharedMat.walkway.map = walkTex;
-    this.sharedMat.walkway.color.setHex(0xffffff);
+    this.sharedMat.walkway.color.setHex(0xb8c4d4);
     this.sharedMat.walkway.needsUpdate = true;
 
     // Seamless cartoon skyscraper glass facade — pre-create 6 shared materials (zero per-chunk allocs!)
@@ -1095,18 +1095,18 @@ export class GameWorld {
 
   public getBiomeInfo(distance: number): { name: string; skyTint: number; grassColor: number; fogColor: number } {
     if (distance < 180) {
-      return { name: 'CITY PARK', skyTint: 0xffffff, grassColor: 0xffffff, fogColor: 0x93c5fd };
+      return { name: 'CITY PARK', skyTint: 0xffffff, grassColor: 0xd9f9d9, fogColor: 0x60a5fa };
     }
     if (distance < 420) {
-      return { name: 'DOWNTOWN', skyTint: 0xdbeafe, grassColor: 0xd1fae5, fogColor: 0x7dd3fc };
+      return { name: 'DOWNTOWN', skyTint: 0xbfdbfe, grassColor: 0xa7f3d0, fogColor: 0x3b82f6 };
     }
     if (distance < 800) {
-      return { name: 'SUNSET BLVD', skyTint: 0xfdba74, grassColor: 0xfef08a, fogColor: 0xfb923c };
+      return { name: 'SUNSET BLVD', skyTint: 0xfb923c, grassColor: 0xd9f99d, fogColor: 0xea580c };
     }
     if (distance < 1500) {
-      return { name: 'NEON STRIP', skyTint: 0xc084fc, grassColor: 0xc4b5fd, fogColor: 0x818cf8 };
+      return { name: 'NEON STRIP', skyTint: 0xa855f7, grassColor: 0xa78bfa, fogColor: 0x6d28d9 };
     }
-    return { name: 'COSMIC ZONE', skyTint: 0x38bdf8, grassColor: 0x818cf8, fogColor: 0x1e1b4b };
+    return { name: 'COSMIC ZONE', skyTint: 0x38bdf8, grassColor: 0x6366f1, fogColor: 0x1e1b4b };
   }
 
   public updateBiomeVisuals(distance: number): void {
