@@ -622,9 +622,19 @@ html, body {
 }
 
 .card-art {
-  font-size: 2.25rem;
-  line-height: 1.05;
-  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.22));
+  width: 58px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-art-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  pointer-events: none;
 }
 
 .card-tier-name, .card-mult-tag {

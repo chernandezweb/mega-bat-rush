@@ -100,7 +100,8 @@ export class GameWorld {
   private particles: Particle[] = [];
   private trailNodes: THREE.Mesh[] = [];
   private trailHistory: THREE.Vector3[] = [];
-  private buildingTextures: THREE.CanvasTexture[] = [];
+  private buildingTextures: THREE.Texture[] = [];
+  private buildingColors: number[] = [0xffffff, 0xdbeafe, 0xfef3c7, 0xfce7f3, 0xd1fae5, 0xe2e8f0];
   private signCache: Map<string, THREE.CanvasTexture> = new Map();
 
   private sharedGeo = {
@@ -157,7 +158,7 @@ export class GameWorld {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
 
-    this.createBuildingTextures();
+    this.loadStylizedTextures();
     this.setupLighting();
     this.createSkyDome();
     this.createFieldDetails();
@@ -253,34 +254,36 @@ export class GameWorld {
     this.scene.add(rubber);
   }
 
-  private createBuildingTextures(): void {
-    const palettes = [
-      { bg: '#64748b', win: '#bae6fd', trim: '#475569' },
-      { bg: '#94a3b8', win: '#e0f2fe', trim: '#64748b' },
-      { bg: '#d6d3a9', win: '#93c5fd', trim: '#a8a27e' },
-      { bg: '#e2b49a', win: '#dbeafe', trim: '#c08b6e' },
-      { bg: '#60a5fa', win: '#eff6ff', trim: '#3b82f6' },
-      { bg: '#475569', win: '#fde68a', trim: '#334155' },
-    ];
-    for (const p of palettes) {
-      const c = document.createElement('canvas');
-      c.width = 128;
-      c.height = 256;
-      const ctx = c.getContext('2d')!;
-      ctx.fillStyle = p.bg;
-      ctx.fillRect(0, 0, 128, 256);
-      ctx.fillStyle = p.trim;
-      ctx.fillRect(0, 0, 128, 12);
-      ctx.fillStyle = p.win;
-      for (let row = 22; row < 240; row += 26) {
-        for (let col = 12; col < 116; col += 28) {
-          ctx.fillRect(col, row, 18, 16);
-        }
-      }
-      const tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this.buildingTextures.push(tex);
-    }
+  private loadStylizedTextures(): void {
+    const loader = new THREE.TextureLoader();
+
+    // Seamless hand-painted cartoon grass turf
+    const grassTex = loader.load('./textures/grass.jpg');
+    grassTex.wrapS = THREE.RepeatWrapping;
+    grassTex.wrapT = THREE.RepeatWrapping;
+    grassTex.repeat.set(16, 7);
+    grassTex.colorSpace = THREE.SRGBColorSpace;
+    this.sharedMat.grass.map = grassTex;
+    this.sharedMat.grass.color.setHex(0xffffff);
+    this.sharedMat.grass.needsUpdate = true;
+
+    // Seamless stylized concrete park sidewalk slabs
+    const walkTex = loader.load('./textures/walkway.jpg');
+    walkTex.wrapS = THREE.RepeatWrapping;
+    walkTex.wrapT = THREE.RepeatWrapping;
+    walkTex.repeat.set(2, 12);
+    walkTex.colorSpace = THREE.SRGBColorSpace;
+    this.sharedMat.walkway.map = walkTex;
+    this.sharedMat.walkway.color.setHex(0xffffff);
+    this.sharedMat.walkway.needsUpdate = true;
+
+    // Seamless cartoon skyscraper glass facade
+    const bldgTex = loader.load('./textures/building.jpg');
+    bldgTex.wrapS = THREE.RepeatWrapping;
+    bldgTex.wrapT = THREE.RepeatWrapping;
+    bldgTex.repeat.set(1, 2);
+    bldgTex.colorSpace = THREE.SRGBColorSpace;
+    this.buildingTextures = [bldgTex];
   }
 
   private createBaseballPlayer(color: number, isPitcher: boolean, emissive = 0x000000): BaseballPlayerRig {
@@ -996,18 +999,18 @@ export class GameWorld {
 
   public getBiomeInfo(distance: number): { name: string; skyTint: number; grassColor: number; fogColor: number } {
     if (distance < 180) {
-      return { name: 'CITY PARK', skyTint: 0xffffff, grassColor: 0x52c44c, fogColor: 0x93c5fd };
+      return { name: 'CITY PARK', skyTint: 0xffffff, grassColor: 0xffffff, fogColor: 0x93c5fd };
     }
     if (distance < 420) {
-      return { name: 'DOWNTOWN', skyTint: 0xdbeafe, grassColor: 0x34d399, fogColor: 0x7dd3fc };
+      return { name: 'DOWNTOWN', skyTint: 0xdbeafe, grassColor: 0xd1fae5, fogColor: 0x7dd3fc };
     }
     if (distance < 800) {
-      return { name: 'SUNSET BLVD', skyTint: 0xfdba74, grassColor: 0x84cc16, fogColor: 0xfb923c };
+      return { name: 'SUNSET BLVD', skyTint: 0xfdba74, grassColor: 0xfef08a, fogColor: 0xfb923c };
     }
     if (distance < 1500) {
-      return { name: 'NEON STRIP', skyTint: 0xc084fc, grassColor: 0x6366f1, fogColor: 0x818cf8 };
+      return { name: 'NEON STRIP', skyTint: 0xc084fc, grassColor: 0xc4b5fd, fogColor: 0x818cf8 };
     }
-    return { name: 'COSMIC ZONE', skyTint: 0x38bdf8, grassColor: 0x312e81, fogColor: 0x1e1b4b };
+    return { name: 'COSMIC ZONE', skyTint: 0x38bdf8, grassColor: 0x818cf8, fogColor: 0x1e1b4b };
   }
 
   public updateBiomeVisuals(distance: number): void {
@@ -1132,8 +1135,9 @@ export class GameWorld {
         const w = 6 + rand(b * 11 + side) * 6;
         const h = 14 + rand(b * 17 + side) * 28;
         const d = 8 + rand(b * 23 + side) * 5;
-        const tex = this.buildingTextures[Math.floor(rand(b * 31 + side) * this.buildingTextures.length)];
-        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 });
+        const tex = this.buildingTextures[0];
+        const tint = this.buildingColors[Math.floor(rand(b * 31 + side) * this.buildingColors.length)];
+        const mat = new THREE.MeshStandardMaterial({ map: tex, color: tint, roughness: 0.55 });
         const bldg = new THREE.Mesh(this.sharedGeo.box, mat);
         bldg.scale.set(w, h, d);
         bldg.position.set(side * (12.5 + w * 0.5 + rand(b * 3 + side) * 4), h * 0.5 - 0.1, bz);
