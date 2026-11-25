@@ -652,11 +652,11 @@ export class BaseballGame {
       }
       this.ballVel.z *= Math.pow(0.89, dt);
 
-      // Active mid-air steering!
+      // Active mid-air steering (snappy & responsive on mobile thumbs!)
       if (Math.abs(this.steerTarget) > 0.02) {
-        this.ballVel.x = THREE.MathUtils.lerp(this.ballVel.x, this.steerTarget * 7.5, dt * 7);
+        this.ballVel.x = THREE.MathUtils.lerp(this.ballVel.x, this.steerTarget * 13.0, dt * 10);
       } else {
-        this.ballVel.x *= Math.pow(0.75, dt);
+        this.ballVel.x *= Math.pow(0.68, dt);
       }
 
       // Soft corridor bounds

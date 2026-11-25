@@ -400,18 +400,19 @@ const game = new BaseballGame(canvas, save, rival, {
   onStateChanged: updateHUD,
 });
 
-// ===== TOUCH / DRAG STEERING + TAP CONTROLS =====
+// ===== MOBILE-PROOF TOUCH & DRAG STEERING + TAP CONTROLS =====
 let ptrActive = false;
+let activePointerId: number | null = null;
 let ptrStartX = 0;
-let ptrDragged = false;
 
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!modalBackdrop.classList.contains('hidden')) return;
   if (game.phase === 'FLYING') {
     ptrActive = true;
+    activePointerId = e.pointerId;
     ptrStartX = e.clientX;
-    ptrDragged = false;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
   } else {
     game.handlePrimaryTap();
   }
@@ -419,19 +420,47 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (!ptrActive || game.phase !== 'FLYING') return;
+  if (activePointerId !== null && e.pointerId !== activePointerId) return;
+  e.preventDefault();
   const dx = e.clientX - ptrStartX;
-  if (Math.abs(dx) > 12) ptrDragged = true;
-  game.setSteer(dx / 75);
+  // Responsive thumb steering: 45px swipe reaches full steer!
+  game.setSteer(dx / 45);
 });
 
-const endDrag = () => {
+const endDrag = (e?: PointerEvent) => {
   if (!ptrActive) return;
+  if (e && activePointerId !== null && e.pointerId !== activePointerId) return;
   ptrActive = false;
+  activePointerId = null;
   game.setSteer(0);
 };
 
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
 window.addEventListener('pointerup', endDrag);
-window.addEventListener('pointercancel', endDrag);
+
+// Explicit touchmove prevention on iOS Safari / Android Chrome so the browser never steals horizontal swipes!
+canvas.addEventListener(
+  'touchmove',
+  (e) => {
+    if (game.phase === 'FLYING' && e.touches.length > 0) {
+      e.preventDefault();
+      if (!ptrActive) {
+        ptrActive = true;
+        ptrStartX = e.touches[0].clientX;
+      }
+      const dx = e.touches[0].clientX - ptrStartX;
+      game.setSteer(dx / 45);
+    }
+  },
+  { passive: false }
+);
+
+canvas.addEventListener('touchend', () => {
+  ptrActive = false;
+  activePointerId = null;
+  game.setSteer(0);
+});
 
 // Desktop keyboard support
 window.addEventListener('keydown', (e) => {
