@@ -9,8 +9,10 @@ import {
   getBatTierName,
   getCurrentLeague,
   getIncomeMultiplier,
+  getMaxPowerupSlots,
   getMuscleTierName,
   getNextLeague,
+  getPowerupCost,
   getUpgradeCost,
   getWallCoinMultiplier,
   loadSave,
@@ -647,29 +649,52 @@ modalBackdrop.addEventListener('click', (e) => {
 });
 document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', closeModals));
 
-// ===== POWERUPS MODAL =====
+// ===== POWERUPS MODAL (LOADOUT CAP + SCALED PRICING + COOLDOWNS) =====
 function renderPowerupsModal(): void {
+  const maxSlots = getMaxPowerupSlots(save);
+  const activeCount = Object.keys(save.activePowerups).filter((k) => save.activePowerups[k]).length;
+  const slotsFull = activeCount >= maxSlots;
+
+  const descEl = modalPowerups.querySelector('.modal-desc');
+  if (descEl) {
+    descEl.innerHTML =
+      `Active Loadout: <strong>${activeCount} / ${maxSlots}</strong>` +
+      (maxSlots < 2 ? ' • <em>Unlock 2nd slot at Major League!</em>' : ' • <em>2-Slot Pro Loadout</em>');
+  }
+
   powerupListEl.innerHTML = '';
   for (const pu of POWERUPS) {
     const isActive = !!save.activePowerups[pu.id];
-    const canAfford = pu.currency === 'coins' ? save.coins >= pu.cost : save.gems >= pu.cost;
+    const cd = save.powerupCooldowns[pu.id] || 0;
+    const cost = getPowerupCost(pu, save);
+    const canAfford = pu.currency === 'coins' ? save.coins >= cost : save.gems >= cost;
+    const disabled = isActive || cd > 0 || slotsFull || !canAfford;
+
+    const btnText = isActive
+      ? 'ACTIVE ✓'
+      : cd > 0
+      ? `⏳ ${cd} SWINGS`
+      : slotsFull
+      ? 'SLOT FULL'
+      : `${pu.currency === 'coins' ? '🪙' : '💎'} ${formatNumber(cost)}`;
+
     const row = document.createElement('div');
     row.className = `powerup-row${isActive ? ' active' : ''}`;
     row.innerHTML = `
       <div class="pu-icon">${pu.emoji}</div>
       <div class="pu-info">
         <div class="pu-name">${pu.name}</div>
-        <div class="pu-desc">${pu.desc}</div>
+        <div class="pu-desc">${pu.desc} (${pu.cooldownSwings}-swing CD)</div>
       </div>
-      <button class="pu-btn${isActive ? ' active' : ''}" ${isActive || !canAfford ? 'disabled' : ''}>
-        ${isActive ? 'ACTIVE ✓' : `${pu.currency === 'coins' ? '🪙' : '💎'} ${pu.cost}`}
+      <button class="pu-btn${isActive ? ' active' : ''}" ${disabled ? 'disabled' : ''}>
+        ${btnText}
       </button>
     `;
     const btn = row.querySelector('button')!;
     btn.addEventListener('click', () => {
-      if (isActive || !canAfford) return;
-      if (pu.currency === 'coins') save.coins -= pu.cost;
-      else save.gems -= pu.cost;
+      if (disabled) return;
+      if (pu.currency === 'coins') save.coins -= cost;
+      else save.gems -= cost;
       save.activePowerups[pu.id] = true;
       saveGame(save);
       sound.playUpgrade();

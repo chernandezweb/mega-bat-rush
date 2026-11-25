@@ -8,6 +8,7 @@ import {
   getEquippedItem,
   getIncomeMultiplier,
   getWallCoinMultiplier,
+  POWERUPS,
   RivalChallenge,
   saveGame,
   WALLS,
@@ -336,6 +337,18 @@ export class BaseballGame {
       this.save.bossDefeats += 1;
       this.chestsWon += 1;
       this.cb.onCallout(`⚔️ BOSS CRUSHED! +🎁`, '#facc15', true);
+    }
+
+    // Tick down existing powerup cooldowns & put used powerups on cooldown!
+    for (const key of Object.keys(this.save.powerupCooldowns)) {
+      const next = (this.save.powerupCooldowns[key] || 0) - 1;
+      if (next <= 0) delete this.save.powerupCooldowns[key];
+      else this.save.powerupCooldowns[key] = next;
+    }
+    for (const pu of POWERUPS) {
+      if (this.save.activePowerups[pu.id]) {
+        this.save.powerupCooldowns[pu.id] = pu.cooldownSwings;
+      }
     }
 
     // Consume powerups

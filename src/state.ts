@@ -4,6 +4,8 @@ export interface PowerupDef {
   emoji: string;
   desc: string;
   cost: number;
+  costRatio: number; // fraction of current Bat upgrade cost for coin powerups
+  cooldownSwings: number;
   currency: 'coins' | 'gems';
   color: string;
 }
@@ -108,6 +110,7 @@ export interface GameSave {
   equippedTrail: string;
   equippedSkin: string;
   activePowerups: Record<string, boolean>;
+  powerupCooldowns: Record<string, number>;
   missions: Mission[];
   soundEnabled: boolean;
   hapticsEnabled: boolean;
@@ -244,6 +247,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '🔥',
     desc: '+22% launch power & extra wall smash damage',
     cost: 120,
+    costRatio: 0.55,
+    cooldownSwings: 3,
     currency: 'coins',
     color: '#ef4444',
   },
@@ -253,6 +258,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '🎯',
     desc: 'Widens the PERFECT hit window!',
     cost: 90,
+    costRatio: 0.42,
+    cooldownSwings: 3,
     currency: 'coins',
     color: '#22c55e',
   },
@@ -262,6 +269,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '⚡',
     desc: 'Bouncier ball + extra jump pads ahead',
     cost: 140,
+    costRatio: 0.62,
+    cooldownSwings: 3,
     currency: 'coins',
     color: '#06b6d4',
   },
@@ -271,6 +280,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '🪶',
     desc: '18% lower gravity for longer hangtime',
     cost: 160,
+    costRatio: 0.7,
+    cooldownSwings: 4,
     currency: 'coins',
     color: '#6366f1',
   },
@@ -280,6 +291,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '🧲',
     desc: 'Pulls air coin rings & 2× ring payout',
     cost: 180,
+    costRatio: 0.78,
+    cooldownSwings: 4,
     currency: 'coins',
     color: '#a855f7',
   },
@@ -289,6 +302,8 @@ export const POWERUPS: PowerupDef[] = [
     emoji: '💎',
     desc: '2.2× total coin payout on your next hit!',
     cost: 15,
+    costRatio: 0,
+    cooldownSwings: 5,
     currency: 'gems',
     color: '#f59e0b',
   },
@@ -365,6 +380,7 @@ export function createDefaultSave(): GameSave {
     equippedTrail: 'trail_classic',
     equippedSkin: 'skin_blue',
     activePowerups: {},
+    powerupCooldowns: {},
     missions: createInitialMissions(),
     soundEnabled: true,
     hapticsEnabled: true,
@@ -385,6 +401,7 @@ export function loadSave(): GameSave {
       wallDamage: parsed.wallDamage && typeof parsed.wallDamage === 'object' ? parsed.wallDamage : {},
       missions: Array.isArray(parsed.missions) && parsed.missions.length ? parsed.missions : def.missions,
       activePowerups: parsed.activePowerups && typeof parsed.activePowerups === 'object' ? parsed.activePowerups : {},
+      powerupCooldowns: parsed.powerupCooldowns && typeof parsed.powerupCooldowns === 'object' ? parsed.powerupCooldowns : {},
     };
   } catch {
     return createDefaultSave();
@@ -442,6 +459,22 @@ export function getWallCoinMultiplier(state: GameSave): number {
 
 export function getUpgradeCost(level: number, base = 35, growth = 1.34): number {
   return Math.floor(base * Math.pow(growth, level - 1) + (level - 1) * 18);
+}
+
+export function getMaxPowerupSlots(state: GameSave): number {
+  return state.leagueTier >= 2 ? 2 : 1;
+}
+
+export function getPowerupCost(pu: PowerupDef, state: GameSave): number {
+  if (pu.currency === 'gems') {
+    return pu.cost + state.leagueTier * 8;
+  }
+  const refUpgrade = Math.max(
+    getUpgradeCost(state.batLevel, 35, 1.34),
+    getUpgradeCost(state.muscleLevel, 35, 1.34)
+  );
+  const leagueFactor = 1 + state.leagueTier * 0.45;
+  return Math.max(pu.cost, Math.round(refUpgrade * pu.costRatio * leagueFactor));
 }
 
 export function getIncomeMultiplier(level: number): number {
