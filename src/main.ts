@@ -4,14 +4,21 @@ import {
   createDefaultSave,
   formatNumber,
   GameSave,
+  GEAR_SETS,
+  getActiveGearSet,
   getBatTierName,
+  getCurrentLeague,
   getIncomeMultiplier,
   getMuscleTierName,
+  getNextLeague,
   getUpgradeCost,
+  getWallCoinMultiplier,
   loadSave,
+  parseRivalFromURL,
   POWERUPS,
   saveGame,
   SHOP_ITEMS,
+  WALLS,
 } from './state';
 import { BaseballGame, GamePhase, RunResult } from './game';
 import { sound } from './audio';
@@ -19,6 +26,7 @@ import { sound } from './audio';
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const save: GameSave = loadSave();
+const rival = parseRivalFromURL();
 
 // DOM elements
 const canvas = $<HTMLCanvasElement>('game-canvas');
@@ -28,6 +36,10 @@ const coinPill = $('coin-pill');
 const gemPill = $('gem-pill');
 const bestDistanceEl = $('best-distance');
 const comboPill = $('combo-pill');
+const statusPillsRow = $('status-pills-row');
+const leagueChip = $('league-chip');
+const bossChip = $('boss-chip');
+const rivalBanner = $('rival-banner');
 
 const tapStartPrompt = $('tap-start-prompt');
 const timingHud = $('timing-hud');
@@ -50,8 +62,8 @@ const rightButtons = $('right-buttons');
 const activePowerupsStrip = $('active-powerups-strip');
 const powerupActiveDot = $('powerup-active-dot');
 const questBadge = $('quest-badge');
+const leagueBadge = $('league-badge');
 
-// Upgrade card elements
 const upgBat = $<HTMLButtonElement>('upg-bat');
 const upgMuscle = $<HTMLButtonElement>('upg-muscle');
 const upgIncome = $<HTMLButtonElement>('upg-income');
@@ -64,28 +76,70 @@ const resultDistNum = $('result-dist-num');
 const resultHeight = $('result-height');
 const resultBounces = $('result-bounces');
 const resultBonuses = $('result-bonuses');
+const resultMilestones = $('result-milestones');
 const resultCoins = $('result-coins');
 const resultGemLine = $('result-gem-line');
 const resultGems = $('result-gems');
+const btnOpenChest = $<HTMLButtonElement>('btn-open-chest');
+const chestLootEl = $('chest-loot');
+const multReelWrap = $('mult-reel-wrap');
+const multReelNeedle = $('mult-reel-needle');
 const btnBonus2x = $<HTMLButtonElement>('btn-bonus-2x');
+const btnShare = $<HTMLButtonElement>('btn-share');
 const btnContinue = $<HTMLButtonElement>('btn-continue');
 
 // Modals
 const modalBackdrop = $('modal-backdrop');
 const modalPowerups = $('modal-powerups');
 const modalShop = $('modal-shop');
+const modalLeague = $('modal-league');
 const modalQuests = $('modal-quests');
 const modalSettings = $('modal-settings');
 const powerupListEl = $('powerup-list');
+const setBonusBarEl = $('set-bonus-bar');
 const shopGridEl = $('shop-grid');
+const leagueContentEl = $('league-content');
 const questListEl = $('quest-list');
 const settingsStatsEl = $('settings-stats');
+const inputPlayerName = $<HTMLInputElement>('input-player-name');
 const toggleSound = $<HTMLInputElement>('toggle-sound');
 const toggleHaptics = $<HTMLInputElement>('toggle-haptics');
 
 let activeShopTab: 'bats' | 'helmets' | 'trails' | 'skins' = 'bats';
 let lastRunResult: RunResult | null = null;
 let bonusClaimed = false;
+let chestsRemaining = 0;
+
+// 5x Multiplier Reel animation state
+let reelRaf = 0;
+let reelPos = 50; // 0..100
+let reelDir = 1;
+
+function startMultiplierReel(): void {
+  cancelAnimationFrame(reelRaf);
+  reelPos = 10;
+  reelDir = 1;
+  let last = performance.now();
+  const tick = (now: number) => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (!bonusClaimed && !resultOverlay.classList.contains('hidden')) {
+      reelPos += reelDir * dt * 165;
+      if (reelPos >= 98) { reelPos = 98; reelDir = -1; }
+      if (reelPos <= 2) { reelPos = 2; reelDir = 1; }
+      multReelNeedle.style.left = `${reelPos}%`;
+      reelRaf = requestAnimationFrame(tick);
+    }
+  };
+  reelRaf = requestAnimationFrame(tick);
+}
+
+function getReelMultiplier(pos: number): number {
+  // Segments: 1.2fr (0..23.5) | 1fr (23.5..43.1) | 0.7fr (43.1..56.9) | 1fr (56.9..76.5) | 1.2fr (76.5..100)
+  if (pos >= 43.1 && pos <= 56.9) return 5.0;
+  if (pos >= 23.5 && pos <= 76.5) return 2.0;
+  return 1.5;
+}
 
 function bumpPill(el: HTMLElement): void {
   el.classList.remove('bump');
@@ -100,7 +154,7 @@ function showCallout(text: string, color = '#ffffff', big = false): void {
   el.textContent = text;
   el.style.color = color;
   calloutLayer.appendChild(el);
-  setTimeout(() => el.remove(), 1080);
+  setTimeout(() => el.remove(), 1120);
 }
 
 function renderDots(containerId: string, level: number): void {
@@ -126,10 +180,36 @@ function updateHUD(): void {
     comboPill.classList.add('hidden');
   }
 
+  // League & Boss countdown pills
+  const league = getCurrentLeague(save);
+  const nextLeague = getNextLeague(save);
+  leagueChip.textContent = `${league.emoji} ${league.name}`;
+  const canPromote = !!nextLeague && save.bestDistance >= nextLeague.reqDistance;
+  leagueBadge.classList.toggle('hidden', !canPromote);
+
+  const swingsToBoss = game ? game.getSwingsUntilBoss() : 4;
+  if (swingsToBoss === 0) {
+    bossChip.textContent = '🔥 BOSS DUEL READY!';
+    bossChip.classList.add('ready');
+  } else {
+    bossChip.textContent = `⚔️ Boss in ${swingsToBoss}`;
+    bossChip.classList.remove('ready');
+  }
+
+  // Rival challenge banner
+  if (rival) {
+    rivalBanner.classList.remove('hidden');
+    rivalBanner.textContent = rival.beaten
+      ? `🏆 BEAT ${rival.name.toUpperCase()} (${rival.distance}m)!`
+      : `🚩 BEAT ${rival.name.toUpperCase()}: ${rival.distance}m`;
+  } else {
+    rivalBanner.classList.add('hidden');
+  }
+
   // Upgrade cards
-  const batCost = getUpgradeCost(save.batLevel, 30, 1.24);
-  const muscleCost = getUpgradeCost(save.muscleLevel, 30, 1.24);
-  const incomeCost = getUpgradeCost(save.incomeLevel, 35, 1.26);
+  const batCost = getUpgradeCost(save.batLevel, 25, 1.22);
+  const muscleCost = getUpgradeCost(save.muscleLevel, 25, 1.22);
+  const incomeCost = getUpgradeCost(save.incomeLevel, 30, 1.24);
 
   $('lv-bat').textContent = String(save.batLevel);
   $('tier-bat').textContent = getBatTierName(save.batLevel);
@@ -146,16 +226,24 @@ function updateHUD(): void {
   upgMuscle.classList.toggle('cant-afford', save.coins < muscleCost);
 
   $('lv-income').textContent = String(save.incomeLevel);
-  $('mult-income').textContent = `×${getIncomeMultiplier(save.incomeLevel).toFixed(1)}`;
+  const totalCoinMult = getIncomeMultiplier(save.incomeLevel) * league.coinMult * getWallCoinMultiplier(save);
+  $('mult-income').textContent = `×${totalCoinMult.toFixed(1)}`;
   $('cost-income').textContent = formatNumber(incomeCost);
   renderDots('dots-income', save.incomeLevel);
   upgIncome.classList.toggle('affordable', save.coins >= incomeCost);
   upgIncome.classList.toggle('cant-afford', save.coins < incomeCost);
 
-  // Active powerups strip
+  // Active powerups strip + active gear set chip
   const activeIds = Object.keys(save.activePowerups).filter((k) => save.activePowerups[k]);
   powerupActiveDot.classList.toggle('hidden', activeIds.length === 0);
   activePowerupsStrip.innerHTML = '';
+  const activeSet = getActiveGearSet(save);
+  if (activeSet) {
+    const chip = document.createElement('div');
+    chip.className = 'active-pu-chip';
+    chip.textContent = `${activeSet.emoji} ${activeSet.name}`;
+    activePowerupsStrip.appendChild(chip);
+  }
   for (const id of activeIds) {
     const def = POWERUPS.find((p) => p.id === id);
     if (!def) continue;
@@ -176,20 +264,20 @@ function handlePhaseChange(phase: GamePhase): void {
   upgradeDock.classList.toggle('hidden', !isIdle);
   leftButtons.classList.toggle('hidden', !isIdle);
   rightButtons.classList.toggle('hidden', !isIdle);
-  // Hide active powerup chips during PITCHING / HITSTOP / RESULT so the at-bat view is 100% clear!
-  activePowerupsStrip.classList.toggle('hidden', phase !== 'IDLE');
+  statusPillsRow.classList.toggle('hidden', !isIdle);
+  activePowerupsStrip.classList.toggle('hidden', !isIdle);
 
   timingHud.classList.toggle('hidden', phase !== 'PITCHING');
   flightHud.classList.toggle('hidden', phase !== 'FLYING');
   resultOverlay.classList.toggle('hidden', phase !== 'RESULT');
+  if (phase !== 'RESULT') cancelAnimationFrame(reelRaf);
 }
 
-const game = new BaseballGame(canvas, save, {
+const game = new BaseballGame(canvas, save, rival, {
   onPhaseChange: handlePhaseChange,
   onPitchUpdate: (progress, pitchLabel, isGolden) => {
     pitchTypeBadge.textContent = pitchLabel;
     pitchTypeBadge.classList.toggle('golden', isGolden);
-    // Map pitchProgress [0..1.15] onto [0%..100%] so sweet spot 0.88 lands right inside the gold zone (~76.5%)
     const pct = Math.min(100, Math.max(0, (progress / 1.15) * 100));
     timingCursor.style.left = `${pct}%`;
   },
@@ -200,15 +288,20 @@ const game = new BaseballGame(canvas, save, {
     flightCoinsLive.textContent = `+${formatNumber(liveCoins)} 🪙`;
     slamBarFill.style.width = slamsLeft > 0 ? '100%' : '0%';
     slamPrompt.classList.toggle('ready', canSlam);
-    slamPrompt.classList.toggle('hidden', slamsLeft <= 0);
-    slamText.textContent = canSlam
-      ? `⚡ TAP FOR POWER SLAM! (${slamsLeft})`
-      : `⚡ FLY HIGH TO SLAM (${slamsLeft})`;
+    slamPrompt.classList.toggle('hidden', false);
+    slamText.textContent =
+      slamsLeft > 0
+        ? canSlam
+          ? `⚡ TAP SLAM (${slamsLeft}) • DRAG TO STEER`
+          : `↔️ DRAG TO STEER • SLAM (${slamsLeft})`
+        : '↔️ DRAG LEFT/RIGHT TO STEER!';
   },
   onCallout: showCallout,
   onRunComplete: (res) => {
     lastRunResult = res;
     bonusClaimed = false;
+    chestsRemaining = res.chestsWon;
+
     resultNewRecord.classList.toggle('hidden', !res.isNewRecord);
     resultQuality.textContent =
       res.quality === 'PERFECT'
@@ -224,6 +317,18 @@ const game = new BaseballGame(canvas, save, {
     resultBonuses.textContent = String(res.bonuses);
     resultCoins.textContent = `+${formatNumber(res.coinsEarned)}`;
 
+    // Milestone badges
+    const tags: string[] = [];
+    if (res.wallBrokenName) tags.push(`💥 UNLOCKED ${res.wallBrokenName}!`);
+    if (res.bossBeaten) tags.push(`⚔️ BEAT ${res.bossBeaten.name}`);
+    if (res.rivalBeatenName) tags.push(`🏆 BEAT ${res.rivalBeatenName.toUpperCase()}!`);
+    if (tags.length) {
+      resultMilestones.innerHTML = tags.map((t) => `<span class="milestone-tag">${t}</span>`).join('');
+      resultMilestones.classList.remove('hidden');
+    } else {
+      resultMilestones.classList.add('hidden');
+    }
+
     if (res.gemsEarned > 0) {
       resultGemLine.classList.remove('hidden');
       resultGems.textContent = `+${res.gemsEarned}`;
@@ -231,29 +336,82 @@ const game = new BaseballGame(canvas, save, {
       resultGemLine.classList.add('hidden');
     }
 
+    // Mystery Chest button
+    chestLootEl.classList.add('hidden');
+    chestLootEl.textContent = '';
+    if (chestsRemaining > 0) {
+      btnOpenChest.classList.remove('hidden');
+      btnOpenChest.textContent =
+        chestsRemaining > 1 ? `🎁 OPEN MYSTERY CHEST (${chestsRemaining})` : '🎁 OPEN MYSTERY CHEST!';
+    } else {
+      btnOpenChest.classList.add('hidden');
+    }
+
+    // 5x Multiplier Reel
+    multReelWrap.classList.remove('hidden');
     btnBonus2x.disabled = false;
-    btnBonus2x.innerHTML = `<span>⚡ CLAIM 2X COINS (+${formatNumber(res.coinsEarned)})</span>`;
+    btnBonus2x.innerHTML = '<span>🎯 STOP REEL FOR UP TO 5×!</span>';
+    startMultiplierReel();
+
     bumpPill(coinPill);
     if (res.gemsEarned > 0) bumpPill(gemPill);
   },
   onStateChanged: updateHUD,
 });
 
-// Canvas tap & keyboard Spacebar support!
+// ===== TOUCH / DRAG STEERING + TAP CONTROLS =====
+let ptrActive = false;
+let ptrStartX = 0;
+let ptrDragged = false;
+
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!modalBackdrop.classList.contains('hidden')) return;
-  game.handlePrimaryTap();
+  if (game.phase === 'FLYING') {
+    ptrActive = true;
+    ptrStartX = e.clientX;
+    ptrDragged = false;
+  } else {
+    game.handlePrimaryTap();
+  }
 });
 
+canvas.addEventListener('pointermove', (e) => {
+  if (!ptrActive || game.phase !== 'FLYING') return;
+  const dx = e.clientX - ptrStartX;
+  if (Math.abs(dx) > 12) ptrDragged = true;
+  game.setSteer(dx / 75);
+});
+
+const endDrag = () => {
+  if (!ptrActive) return;
+  ptrActive = false;
+  game.setSteer(0);
+  if (!ptrDragged && game.phase === 'FLYING') {
+    game.handlePrimaryTap(); // quick tap triggers Power Slam!
+  }
+};
+
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+// Desktop keyboard support
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && modalBackdrop.classList.contains('hidden')) {
+  if (!modalBackdrop.classList.contains('hidden')) return;
+  if (e.code === 'Space') {
     e.preventDefault();
-    if (game.phase === 'RESULT') {
-      game.resetToIdle(true);
-    } else {
-      game.handlePrimaryTap();
-    }
+    if (game.phase === 'RESULT') game.resetToIdle(true);
+    else game.handlePrimaryTap();
+  } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+    game.setSteer(-1);
+  } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+    game.setSteer(1);
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'ArrowRight' || e.code === 'KeyD') {
+    game.setSteer(0);
   }
 });
 
@@ -264,9 +422,7 @@ function buyUpgrade(type: 'bat' | 'muscle' | 'income'): void {
   const level =
     type === 'bat' ? save.batLevel : type === 'muscle' ? save.muscleLevel : save.incomeLevel;
   const cost =
-    type === 'income'
-      ? getUpgradeCost(level, 35, 1.26)
-      : getUpgradeCost(level, 30, 1.24);
+    type === 'income' ? getUpgradeCost(level, 30, 1.24) : getUpgradeCost(level, 25, 1.22);
 
   if (save.coins < cost) {
     sound.playMiss();
@@ -295,7 +451,7 @@ function buyUpgrade(type: 'bat' | 'muscle' | 'income'): void {
       ? `BAT Lv.${save.batLevel}!`
       : type === 'muscle'
       ? `MUSCLE Lv.${save.muscleLevel}!`
-      : `INCOME ×${getIncomeMultiplier(save.incomeLevel).toFixed(1)}!`;
+      : `INCOME Lv.${save.incomeLevel}!`;
   showCallout(label, '#4ade80', false);
 }
 
@@ -303,28 +459,97 @@ upgBat.addEventListener('click', (e) => { e.stopPropagation(); buyUpgrade('bat')
 upgMuscle.addEventListener('click', (e) => { e.stopPropagation(); buyUpgrade('muscle'); });
 upgIncome.addEventListener('click', (e) => { e.stopPropagation(); buyUpgrade('income'); });
 
-// ===== RESULT ACTIONS =====
+// ===== RESULT ACTIONS (5X REEL, MYSTERY CHEST, SHARE CHALLENGE) =====
 btnBonus2x.addEventListener('click', () => {
   if (!lastRunResult || bonusClaimed) return;
   bonusClaimed = true;
-  save.coins += lastRunResult.coinsEarned;
-  save.totalCoinsEarned += lastRunResult.coinsEarned;
+  cancelAnimationFrame(reelRaf);
+
+  const mult = getReelMultiplier(reelPos);
+  const extraCoins = Math.round(lastRunResult.coinsEarned * (mult - 1));
+  save.coins += extraCoins;
+  save.totalCoinsEarned += extraCoins;
   saveGame(save);
-  sound.playCoin();
+
+  if (mult >= 5) sound.playNewRecord();
+  else sound.playCoin();
+
   bumpPill(coinPill);
-  resultCoins.textContent = `+${formatNumber(lastRunResult.coinsEarned * 2)}`;
+  resultCoins.textContent = `+${formatNumber(lastRunResult.coinsEarned + extraCoins)}`;
   btnBonus2x.disabled = true;
-  btnBonus2x.innerHTML = '<span>✓ 2X COINS CLAIMED!</span>';
+  btnBonus2x.innerHTML = `<span>${mult >= 5 ? '🔥 JACKPOT' : '✓'} ${mult}× CLAIMED! (+${formatNumber(extraCoins)})</span>`;
   updateHUD();
 });
 
+btnOpenChest.addEventListener('click', () => {
+  if (chestsRemaining <= 0) return;
+  chestsRemaining -= 1;
+  sound.playChestOpen();
+
+  const league = getCurrentLeague(save);
+  const gemMult = league.tier >= 3 ? 2 : 1;
+  const bonusCoins = Math.round((75 + save.batLevel * 22) * league.coinMult);
+  const bonusGems = (6 + Math.floor(Math.random() * 8)) * gemMult;
+  save.coins += bonusCoins;
+  save.gems += bonusGems;
+
+  // 30% chance to unlock a free random unowned Shop item!
+  const unowned = SHOP_ITEMS.filter((i) => !save.ownedItems.includes(i.id));
+  let itemText = '';
+  if (unowned.length > 0 && Math.random() < 0.3) {
+    const gift = unowned[Math.floor(Math.random() * Math.min(4, unowned.length))];
+    save.ownedItems.push(gift.id);
+    itemText = ` + FREE ${gift.emoji} ${gift.name}!`;
+  }
+
+  saveGame(save);
+  bumpPill(coinPill);
+  bumpPill(gemPill);
+  updateHUD();
+
+  chestLootEl.classList.remove('hidden');
+  chestLootEl.textContent = `🎁 Chest: +${formatNumber(bonusCoins)} 🪙 & +${bonusGems} 💎${itemText}`;
+
+  if (chestsRemaining > 0) {
+    btnOpenChest.textContent = `🎁 OPEN NEXT CHEST (${chestsRemaining})`;
+  } else {
+    btnOpenChest.classList.add('hidden');
+  }
+});
+
+btnShare.addEventListener('click', async () => {
+  const dist = Math.max(save.bestDistance, lastRunResult?.distance || 0);
+  const name = encodeURIComponent(save.playerName || 'Slugger');
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
+  const shareUrl = `${baseUrl}?rival=${name}&dist=${dist}`;
+  const shareText = `⚾ I crushed a ${dist}m home run in MEGA BAT RUSH! Can you beat my 3D flag?`;
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Mega Bat Rush Challenge', text: shareText, url: shareUrl });
+      return;
+    }
+  } catch {
+    // fallback to clipboard
+  }
+
+  try {
+    await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+    btnShare.textContent = '✓ LINK COPIED!';
+    setTimeout(() => { btnShare.textContent = '⚔️ CHALLENGE'; }, 1800);
+  } catch {
+    prompt('Copy your friend challenge link:', shareUrl);
+  }
+});
+
 btnContinue.addEventListener('click', () => {
+  cancelAnimationFrame(reelRaf);
   game.resetToIdle(true);
 });
 
 // ===== MODAL HELPERS =====
 function openModal(panel: HTMLElement): void {
-  [modalPowerups, modalShop, modalQuests, modalSettings].forEach((p) => p.classList.add('hidden'));
+  [modalPowerups, modalShop, modalLeague, modalQuests, modalSettings].forEach((p) => p.classList.add('hidden'));
   panel.classList.remove('hidden');
   modalBackdrop.classList.remove('hidden');
 }
@@ -376,8 +601,20 @@ $('btn-powerups').addEventListener('click', () => {
   openModal(modalPowerups);
 });
 
-// ===== SHOP MODAL =====
+// ===== SHOP MODAL (WITH SET BONUSES) =====
 function renderShopModal(): void {
+  const activeSet = getActiveGearSet(save);
+  if (activeSet) {
+    setBonusBarEl.className = 'set-bonus-bar active';
+    setBonusBarEl.textContent = `✨ ACTIVE SET — ${activeSet.emoji} ${activeSet.name}: ${activeSet.desc}`;
+  } else {
+    setBonusBarEl.className = 'set-bonus-bar';
+    setBonusBarEl.innerHTML =
+      `<strong>Set Bonuses:</strong> ` +
+      GEAR_SETS.map((s) => `${s.emoji} ${s.name}`).join(' • ') +
+      `<br/>Match Helmet + Bat + Trail to activate!`;
+  }
+
   shopGridEl.innerHTML = '';
   const items = SHOP_ITEMS.filter((i) => i.category === activeShopTab);
   const equippedId =
@@ -441,6 +678,69 @@ $('btn-shop').addEventListener('click', () => {
   openModal(modalShop);
 });
 
+// ===== LEAGUE PRESTIGE MODAL =====
+function renderLeagueModal(): void {
+  const cur = getCurrentLeague(save);
+  const next = getNextLeague(save);
+  const brokenCount = save.brokenWalls.length;
+
+  let html = `
+    <div class="league-card current">
+      <div class="league-title">${cur.emoji} ${cur.name}</div>
+      <div class="league-sub">
+        <strong>Permanent Multipliers:</strong> ${cur.coinMult}× Coins • ${Math.round((cur.powerMult - 1) * 100)}% Power<br/>
+        <strong>Walls Smashed:</strong> ${brokenCount} / ${WALLS.length} (+${Math.round((getWallCoinMultiplier(save) - 1) * 100)}% Coins)<br/>
+        ${cur.relicDesc}
+      </div>
+    </div>
+  `;
+
+  if (next) {
+    const unlocked = save.bestDistance >= next.reqDistance;
+    html += `
+      <div class="league-card">
+        <div class="league-title">NEXT: ${next.emoji} ${next.name}</div>
+        <div class="league-sub">
+          Requires Best Distance: <strong>${next.reqDistance}m</strong> (You: ${save.bestDistance}m)<br/>
+          Unlocks: <strong>${next.coinMult}× Coins</strong> & <strong>+${Math.round((next.powerMult - 1) * 100)}% Power</strong><br/>
+          ${next.relicDesc}<br/><br/>
+          <em>Resets Bat/Muscle/Income levels & coins. Keeps ALL Bats, Helmets, Trails, Skins, Gems & Broken Walls!</em>
+        </div>
+        <button class="btn-promote" id="btn-do-promote" ${!unlocked ? 'disabled' : ''}>
+          ${unlocked ? `🏆 PROMOTE TO ${next.name.toUpperCase()}!` : `REACH ${next.reqDistance}m TO PROMOTE`}
+        </button>
+      </div>
+    `;
+  } else {
+    html += `<div class="league-card"><div class="league-title">👑 MAX LEAGUE REACHED!</div><div class="league-sub">You are a true Hall of Fame legend!</div></div>`;
+  }
+
+  leagueContentEl.innerHTML = html;
+  const promoteBtn = document.getElementById('btn-do-promote');
+  if (promoteBtn) {
+    promoteBtn.addEventListener('click', () => {
+      if (!next || save.bestDistance < next.reqDistance) return;
+      save.leagueTier += 1;
+      save.batLevel = 1;
+      save.muscleLevel = 1;
+      save.incomeLevel = 1;
+      save.coins = 60;
+      save.gems += 25;
+      saveGame(save);
+      sound.playChestOpen();
+      game.refreshAppearance();
+      updateHUD();
+      renderLeagueModal();
+      showCallout(`🏆 ${next.name.toUpperCase()}!!`, '#facc15', true);
+    });
+  }
+}
+
+$('btn-league').addEventListener('click', () => {
+  renderLeagueModal();
+  openModal(modalLeague);
+});
+
 // ===== MISSIONS MODAL =====
 function renderQuestsModal(): void {
   questListEl.innerHTML = '';
@@ -481,15 +781,22 @@ $('btn-quests').addEventListener('click', () => {
 
 // ===== SETTINGS MODAL =====
 $('btn-settings').addEventListener('click', () => {
+  inputPlayerName.value = save.playerName || 'Slugger';
   toggleSound.checked = save.soundEnabled;
   toggleHaptics.checked = save.hapticsEnabled;
   settingsStatsEl.innerHTML = `
     <div><strong>Best Distance:</strong> ${save.bestDistance}m</div>
-    <div><strong>Total Swings:</strong> ${save.totalSwings}</div>
-    <div><strong>Perfect Hits:</strong> ${save.totalPerfects}</div>
-    <div><strong>Total Coins Earned:</strong> ${formatNumber(save.totalCoinsEarned)}</div>
+    <div><strong>League:</strong> ${getCurrentLeague(save).emoji} ${getCurrentLeague(save).name}</div>
+    <div><strong>Bosses Defeated:</strong> ${save.bossDefeats}</div>
+    <div><strong>Walls Smashed:</strong> ${save.brokenWalls.length} / ${WALLS.length}</div>
+    <div><strong>Total Swings:</strong> ${save.totalSwings} (${save.totalPerfects} Perfects)</div>
   `;
   openModal(modalSettings);
+});
+
+inputPlayerName.addEventListener('change', () => {
+  save.playerName = inputPlayerName.value.trim().slice(0, 14) || 'Slugger';
+  saveGame(save);
 });
 
 toggleSound.addEventListener('change', () => {
@@ -505,7 +812,7 @@ toggleHaptics.addEventListener('change', () => {
 });
 
 $('btn-reset-save').addEventListener('click', () => {
-  if (!confirm('Reset all coins, gems, upgrades, and best distance?')) return;
+  if (!confirm('Reset all coins, gems, upgrades, leagues, and best distance?')) return;
   const fresh = createDefaultSave();
   Object.assign(save, fresh);
   saveGame(save);

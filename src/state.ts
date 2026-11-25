@@ -26,6 +26,54 @@ export interface ShopItem {
   glideBonus?: number;
 }
 
+export interface GearSetBonus {
+  id: 'storm' | 'midas' | 'cosmic';
+  name: string;
+  emoji: string;
+  desc: string;
+  helmetId: string;
+  batId: string;
+  trailId: string;
+}
+
+export interface WallDef {
+  id: string;
+  distance: number;
+  name: string;
+  worldUnlocked: string;
+  maxHp: number;
+  color: number;
+  accent: number;
+  rewardGems: number;
+  coinMultBonus: number;
+}
+
+export interface BossDef {
+  id: 'flamethrower' | 'knuckle' | 'phantom' | 'emperor';
+  name: string;
+  pitchName: string;
+  emoji: string;
+  color: number;
+  hatColor: number;
+  coinMult: number;
+}
+
+export interface LeagueDef {
+  tier: number;
+  name: string;
+  emoji: string;
+  reqDistance: number;
+  coinMult: number;
+  powerMult: number;
+  relicDesc: string;
+}
+
+export interface RivalChallenge {
+  name: string;
+  distance: number;
+  beaten: boolean;
+}
+
 export interface Mission {
   id: string;
   type: 'distance' | 'perfects' | 'upgrades' | 'bonuses' | 'swings' | 'coins';
@@ -37,18 +85,23 @@ export interface Mission {
 }
 
 export interface GameSave {
+  playerName: string;
   coins: number;
   gems: number;
   bestDistance: number;
   batLevel: number;
   muscleLevel: number;
   incomeLevel: number;
+  leagueTier: number; // 0 = Rookie, 1 = Minor, 2 = Major, 3 = All-Star, 4 = Hall of Fame
   combo: number;
   totalSwings: number;
   totalPerfects: number;
   totalUpgrades: number;
   totalBonuses: number;
   totalCoinsEarned: number;
+  bossDefeats: number;
+  wallDamage: Record<string, number>; // damage dealt to each wall
+  brokenWalls: string[];
   ownedItems: string[];
   equippedBat: string;
   equippedHelmet: string;
@@ -60,12 +113,136 @@ export interface GameSave {
   hapticsEnabled: boolean;
 }
 
+export const WALLS: WallDef[] = [
+  {
+    id: 'wall_park',
+    distance: 150,
+    name: 'PARK FENCE',
+    worldUnlocked: 'DOWNTOWN',
+    maxHp: 90,
+    color: 0xb45309,
+    accent: 0xfde68a,
+    rewardGems: 15,
+    coinMultBonus: 0.35,
+  },
+  {
+    id: 'wall_glass',
+    distance: 350,
+    name: 'GLASS TOWER',
+    worldUnlocked: 'SUNSET CANYON',
+    maxHp: 190,
+    color: 0x38bdf8,
+    accent: 0xe0f2fe,
+    rewardGems: 25,
+    coinMultBonus: 0.55,
+  },
+  {
+    id: 'wall_cyber',
+    distance: 700,
+    name: 'CYBER BARRIER',
+    worldUnlocked: 'NEON STRIP',
+    maxHp: 340,
+    color: 0xa855f7,
+    accent: 0xf0abfc,
+    rewardGems: 40,
+    coinMultBonus: 0.85,
+  },
+  {
+    id: 'wall_space',
+    distance: 1200,
+    name: 'ORBITAL SHIELD',
+    worldUnlocked: 'COSMIC ZONE',
+    maxHp: 540,
+    color: 0xfacc15,
+    accent: 0x38bdf8,
+    rewardGems: 65,
+    coinMultBonus: 1.25,
+  },
+];
+
+export const BOSSES: BossDef[] = [
+  {
+    id: 'flamethrower',
+    name: 'THE FLAMETHROWER',
+    pitchName: '🔥 TURBO SPLITTER',
+    emoji: '🔥',
+    color: 0xdc2626,
+    hatColor: 0xf97316,
+    coinMult: 2.0,
+  },
+  {
+    id: 'knuckle',
+    name: 'CURVEBALL KING',
+    pitchName: '🌀 WOBBLE KNUCKLE',
+    emoji: '🌀',
+    color: 0x7c3aed,
+    hatColor: 0x38bdf8,
+    coinMult: 2.2,
+  },
+  {
+    id: 'phantom',
+    name: 'PHANTOM ACE',
+    pitchName: '👻 GHOST PITCH',
+    emoji: '👻',
+    color: 0x0f172a,
+    hatColor: 0x22d3ee,
+    coinMult: 2.5,
+  },
+  {
+    id: 'emperor',
+    name: 'GOLDEN EMPEROR',
+    pitchName: '👑 HEAVY GOLD BALL (4×)',
+    emoji: '👑',
+    color: 0xd97706,
+    hatColor: 0xfacc15,
+    coinMult: 4.0,
+  },
+];
+
+export const GEAR_SETS: GearSetBonus[] = [
+  {
+    id: 'storm',
+    name: 'Storm God Set',
+    emoji: '⚡',
+    desc: 'Lightning bounces (+18% bounce carry & +20 coins per bounce!)',
+    helmetId: 'helmet_viking',
+    batId: 'bat_hammer',
+    trailId: 'trail_electric',
+  },
+  {
+    id: 'midas',
+    name: 'Royal Midas Set',
+    emoji: '👑',
+    desc: '+60% total coins & every 3rd pitch is Golden!',
+    helmetId: 'helmet_crown',
+    batId: 'bat_gold',
+    trailId: 'trail_gold',
+  },
+  {
+    id: 'cosmic',
+    name: 'Cosmic Ace Set',
+    emoji: '🌌',
+    desc: '-22% gravity & +1 extra Power Slam every at-bat!',
+    helmetId: 'helmet_astro',
+    batId: 'bat_galaxy',
+    trailId: 'trail_rainbow',
+  },
+];
+
+export const LEAGUES: LeagueDef[] = [
+  { tier: 0, name: 'Rookie Park', emoji: '⚾', reqDistance: 0, coinMult: 1.0, powerMult: 1.0, relicDesc: 'Welcome to the big leagues!' },
+  { tier: 1, name: 'Minor League', emoji: '🥉', reqDistance: 250, coinMult: 1.8, powerMult: 1.18, relicDesc: 'Relic: +25% Bullseye Slam bounce & 1.8× coins!' },
+  { tier: 2, name: 'Major League', emoji: '🥈', reqDistance: 550, coinMult: 3.0, powerMult: 1.38, relicDesc: 'Relic: Free Fireball every 4th swing & 3× coins!' },
+  { tier: 3, name: 'All-Star Pro', emoji: '🥇', reqDistance: 950, coinMult: 5.0, powerMult: 1.62, relicDesc: 'Relic: 2× Gem drops from chests & 5× coins!' },
+  { tier: 4, name: 'Hall of Fame', emoji: '🏆', reqDistance: 1600, coinMult: 8.5, powerMult: 1.95, relicDesc: 'Relic: +1 permanent Power Slam & 8.5× coins!' },
+];
+
 export const POWERUPS: PowerupDef[] = [
   {
     id: 'fireball',
     name: 'Fireball Slugger',
     emoji: '🔥',
-    desc: '+28% launch power & fiery shockwave',
+    desc: '+28% launch power & extra wall smash damage',
     cost: 65,
     currency: 'coins',
     color: '#ef4444',
@@ -83,7 +260,7 @@ export const POWERUPS: PowerupDef[] = [
     id: 'superbounce',
     name: 'Hyper Bounce',
     emoji: '⚡',
-    desc: 'Bouncier ball + extra jump pads ahead',
+    desc: 'Bouncier ball + extra jump pads & +1 Slam',
     cost: 80,
     currency: 'coins',
     color: '#06b6d4',
@@ -118,325 +295,38 @@ export const POWERUPS: PowerupDef[] = [
 ];
 
 export const SHOP_ITEMS: ShopItem[] = [
-  // ===== BATS (8 distinct 3D models) =====
-  {
-    id: 'bat_wood',
-    category: 'bats',
-    name: 'Classic Ash',
-    emoji: '🏏',
-    desc: 'Reliable park slugger',
-    cost: 0,
-    currency: 'coins',
-    primaryColor: 0xd9a066,
-    secondaryColor: 0x222222,
-    shape: 'classic',
-    powerBonus: 0,
-  },
-  {
-    id: 'bat_pro_metal',
-    category: 'bats',
-    name: 'Pro Alloy',
-    emoji: '⚾',
-    desc: '+6% swing power',
-    cost: 180,
-    currency: 'coins',
-    primaryColor: 0xe2e8f0,
-    secondaryColor: 0x2563eb,
-    shape: 'alloy',
-    powerBonus: 0.06,
-  },
-  {
-    id: 'bat_mace',
-    category: 'bats',
-    name: 'Spiked Crusher',
-    emoji: '⚔️',
-    desc: '+12% swing power',
-    cost: 520,
-    currency: 'coins',
-    primaryColor: 0x475569,
-    secondaryColor: 0x94a3b8,
-    shape: 'mace',
-    powerBonus: 0.12,
-  },
-  {
-    id: 'bat_neon',
-    category: 'bats',
-    name: 'Cyber Saber',
-    emoji: '⚡',
-    desc: '+18% swing power',
-    cost: 1100,
-    currency: 'coins',
-    primaryColor: 0x22d3ee,
-    secondaryColor: 0x0f172a,
-    emissive: 0x0891b2,
-    shape: 'saber',
-    powerBonus: 0.18,
-  },
-  {
-    id: 'bat_hammer',
-    category: 'bats',
-    name: 'Thunder Hammer',
-    emoji: '🔨',
-    desc: '+24% swing power',
-    cost: 28,
-    currency: 'gems',
-    primaryColor: 0x94a3b8,
-    secondaryColor: 0x78350f,
-    emissive: 0x38bdf8,
-    shape: 'hammer',
-    powerBonus: 0.24,
-  },
-  {
-    id: 'bat_magma',
-    category: 'bats',
-    name: 'Magma Club',
-    emoji: '🌋',
-    desc: '+30% swing power',
-    cost: 50,
-    currency: 'gems',
-    primaryColor: 0xf97316,
-    secondaryColor: 0x450a0a,
-    emissive: 0xdc2626,
-    shape: 'mace',
-    powerBonus: 0.3,
-  },
-  {
-    id: 'bat_gold',
-    category: 'bats',
-    name: 'Royal Scepter',
-    emoji: '👑',
-    desc: '+35% power & +15% coins',
-    cost: 85,
-    currency: 'gems',
-    primaryColor: 0xfacc15,
-    secondaryColor: 0x854d0e,
-    emissive: 0xb45309,
-    shape: 'scepter',
-    powerBonus: 0.35,
-    coinBonus: 0.15,
-  },
-  {
-    id: 'bat_galaxy',
-    category: 'bats',
-    name: 'Void Nova',
-    emoji: '🌌',
-    desc: '+45% cosmic power',
-    cost: 140,
-    currency: 'gems',
-    primaryColor: 0xc084fc,
-    secondaryColor: 0x1e1b4b,
-    emissive: 0x9333ea,
-    shape: 'saber',
-    powerBonus: 0.45,
-  },
+  // ===== BATS =====
+  { id: 'bat_wood', category: 'bats', name: 'Classic Ash', emoji: '🏏', desc: 'Reliable park slugger', cost: 0, currency: 'coins', primaryColor: 0xd9a066, secondaryColor: 0x222222, shape: 'classic', powerBonus: 0 },
+  { id: 'bat_pro_metal', category: 'bats', name: 'Pro Alloy', emoji: '⚾', desc: '+6% swing power', cost: 180, currency: 'coins', primaryColor: 0xe2e8f0, secondaryColor: 0x2563eb, shape: 'alloy', powerBonus: 0.06 },
+  { id: 'bat_mace', category: 'bats', name: 'Spiked Crusher', emoji: '⚔️', desc: '+12% swing power', cost: 520, currency: 'coins', primaryColor: 0x475569, secondaryColor: 0x94a3b8, shape: 'mace', powerBonus: 0.12 },
+  { id: 'bat_neon', category: 'bats', name: 'Cyber Saber', emoji: '⚡', desc: '+18% swing power', cost: 1100, currency: 'coins', primaryColor: 0x22d3ee, secondaryColor: 0x0f172a, emissive: 0x0891b2, shape: 'saber', powerBonus: 0.18 },
+  { id: 'bat_hammer', category: 'bats', name: 'Thunder Hammer', emoji: '🔨', desc: '+24% power (Storm Set)', cost: 28, currency: 'gems', primaryColor: 0x94a3b8, secondaryColor: 0x78350f, emissive: 0x38bdf8, shape: 'hammer', powerBonus: 0.24 },
+  { id: 'bat_magma', category: 'bats', name: 'Magma Club', emoji: '🌋', desc: '+30% swing power', cost: 50, currency: 'gems', primaryColor: 0xf97316, secondaryColor: 0x450a0a, emissive: 0xdc2626, shape: 'mace', powerBonus: 0.3 },
+  { id: 'bat_gold', category: 'bats', name: 'Royal Scepter', emoji: '👑', desc: '+35% pwr +15% coins (Midas)', cost: 85, currency: 'gems', primaryColor: 0xfacc15, secondaryColor: 0x854d0e, emissive: 0xb45309, shape: 'scepter', powerBonus: 0.35, coinBonus: 0.15 },
+  { id: 'bat_galaxy', category: 'bats', name: 'Void Nova', emoji: '🌌', desc: '+45% power (Cosmic Set)', cost: 140, currency: 'gems', primaryColor: 0xc084fc, secondaryColor: 0x1e1b4b, emissive: 0x9333ea, shape: 'saber', powerBonus: 0.45 },
 
-  // ===== HELMETS (7 distinct 3D headgear!) =====
-  {
-    id: 'helmet_cap',
-    category: 'helmets',
-    name: 'Park Cap',
-    emoji: '🧢',
-    desc: 'Classic baseball cap',
-    cost: 0,
-    currency: 'coins',
-    primaryColor: 0x1d4ed8,
-    secondaryColor: 0xffffff,
-    shape: 'cap',
-  },
-  {
-    id: 'helmet_pro',
-    category: 'helmets',
-    name: 'Pro Helmet',
-    emoji: '⛑️',
-    desc: '+10% coin gain',
-    cost: 160,
-    currency: 'coins',
-    primaryColor: 0xef4444,
-    secondaryColor: 0xf8fafc,
-    shape: 'batting',
-    coinBonus: 0.1,
-  },
-  {
-    id: 'helmet_viking',
-    category: 'helmets',
-    name: 'Viking Horns',
-    emoji: '🪖',
-    desc: '+10% launch power',
-    cost: 460,
-    currency: 'coins',
-    primaryColor: 0x64748b,
-    secondaryColor: 0xfef3c7,
-    shape: 'viking',
-    powerBonus: 0.1,
-  },
-  {
-    id: 'helmet_visor',
-    category: 'helmets',
-    name: 'Cyber Visor',
-    emoji: '🕶️',
-    desc: '+28% sweet spot size',
-    cost: 850,
-    currency: 'coins',
-    primaryColor: 0x0f172a,
-    secondaryColor: 0x22d3ee,
-    emissive: 0x06b6d4,
-    shape: 'visor',
-    sweetSpotBonus: 0.28,
-  },
-  {
-    id: 'helmet_mohawk',
-    category: 'helmets',
-    name: 'Blaze Mohawk',
-    emoji: '🔥',
-    desc: '+16% power & +10% coins',
-    cost: 24,
-    currency: 'gems',
-    primaryColor: 0x1e293b,
-    secondaryColor: 0xf97316,
-    emissive: 0xea580c,
-    shape: 'mohawk',
-    powerBonus: 0.16,
-    coinBonus: 0.1,
-  },
-  {
-    id: 'helmet_astro',
-    category: 'helmets',
-    name: 'Astro Dome',
-    emoji: '👩‍🚀',
-    desc: '+16% air glide distance',
-    cost: 48,
-    currency: 'gems',
-    primaryColor: 0xf8fafc,
-    secondaryColor: 0x38bdf8,
-    emissive: 0x0284c7,
-    shape: 'astro',
-    glideBonus: 0.16,
-  },
-  {
-    id: 'helmet_crown',
-    category: 'helmets',
-    name: 'MVP Crown',
-    emoji: '👑',
-    desc: '+30% coins & +15% power',
-    cost: 80,
-    currency: 'gems',
-    primaryColor: 0xfacc15,
-    secondaryColor: 0xef4444,
-    emissive: 0xd97706,
-    shape: 'crown',
-    coinBonus: 0.3,
-    powerBonus: 0.15,
-  },
+  // ===== HELMETS =====
+  { id: 'helmet_cap', category: 'helmets', name: 'Park Cap', emoji: '🧢', desc: 'Classic baseball cap', cost: 0, currency: 'coins', primaryColor: 0x1d4ed8, secondaryColor: 0xffffff, shape: 'cap' },
+  { id: 'helmet_pro', category: 'helmets', name: 'Pro Helmet', emoji: '⛑️', desc: '+10% coin gain', cost: 160, currency: 'coins', primaryColor: 0xef4444, secondaryColor: 0xf8fafc, shape: 'batting', coinBonus: 0.1 },
+  { id: 'helmet_viking', category: 'helmets', name: 'Viking Horns', emoji: '🪖', desc: '+10% power (Storm Set)', cost: 460, currency: 'coins', primaryColor: 0x64748b, secondaryColor: 0xfef3c7, shape: 'viking', powerBonus: 0.1 },
+  { id: 'helmet_visor', category: 'helmets', name: 'Cyber Visor', emoji: '🕶️', desc: '+28% sweet spot size', cost: 850, currency: 'coins', primaryColor: 0x0f172a, secondaryColor: 0x22d3ee, emissive: 0x06b6d4, shape: 'visor', sweetSpotBonus: 0.28 },
+  { id: 'helmet_mohawk', category: 'helmets', name: 'Blaze Mohawk', emoji: '🔥', desc: '+16% power & +10% coins', cost: 24, currency: 'gems', primaryColor: 0x1e293b, secondaryColor: 0xf97316, emissive: 0xea580c, shape: 'mohawk', powerBonus: 0.16, coinBonus: 0.1 },
+  { id: 'helmet_astro', category: 'helmets', name: 'Astro Dome', emoji: '👩‍🚀', desc: '+16% glide (Cosmic Set)', cost: 48, currency: 'gems', primaryColor: 0xf8fafc, secondaryColor: 0x38bdf8, emissive: 0x0284c7, shape: 'astro', glideBonus: 0.16 },
+  { id: 'helmet_crown', category: 'helmets', name: 'MVP Crown', emoji: '👑', desc: '+30% coins +15% pwr (Midas)', cost: 80, currency: 'gems', primaryColor: 0xfacc15, secondaryColor: 0xef4444, emissive: 0xd97706, shape: 'crown', coinBonus: 0.3, powerBonus: 0.15 },
 
   // ===== TRAILS =====
-  {
-    id: 'trail_classic',
-    category: 'trails',
-    name: 'Air Streak',
-    emoji: '💨',
-    desc: 'Clean white wind trail',
-    cost: 0,
-    currency: 'coins',
-    primaryColor: 0xffffff,
-  },
-  {
-    id: 'trail_fire',
-    category: 'trails',
-    name: 'Blaze Comet',
-    emoji: '🔥',
-    desc: 'Fiery orange sparks',
-    cost: 320,
-    currency: 'coins',
-    primaryColor: 0xff5500,
-    emissive: 0xff2200,
-  },
-  {
-    id: 'trail_electric',
-    category: 'trails',
-    name: 'Volt Bolt',
-    emoji: '⚡',
-    desc: 'Electric cyan energy',
-    cost: 20,
-    currency: 'gems',
-    primaryColor: 0x38bdf8,
-    emissive: 0x0284c7,
-  },
-  {
-    id: 'trail_rainbow',
-    category: 'trails',
-    name: 'Prism Hyper',
-    emoji: '🌈',
-    desc: 'Shifting rainbow ribbon',
-    cost: 50,
-    currency: 'gems',
-    primaryColor: 0xf472b6,
-    emissive: 0xec4899,
-  },
-  {
-    id: 'trail_gold',
-    category: 'trails',
-    name: 'Midas Dust',
-    emoji: '✨',
-    desc: 'Glittering golden comet',
-    cost: 85,
-    currency: 'gems',
-    primaryColor: 0xfde047,
-    emissive: 0xeab308,
-  },
+  { id: 'trail_classic', category: 'trails', name: 'Air Streak', emoji: '💨', desc: 'Clean white wind trail', cost: 0, currency: 'coins', primaryColor: 0xffffff },
+  { id: 'trail_fire', category: 'trails', name: 'Blaze Comet', emoji: '🔥', desc: 'Fiery orange sparks', cost: 320, currency: 'coins', primaryColor: 0xff5500, emissive: 0xff2200 },
+  { id: 'trail_electric', category: 'trails', name: 'Volt Bolt', emoji: '⚡', desc: 'Electric cyan (Storm Set)', cost: 20, currency: 'gems', primaryColor: 0x38bdf8, emissive: 0x0284c7 },
+  { id: 'trail_rainbow', category: 'trails', name: 'Prism Hyper', emoji: '🌈', desc: 'Rainbow ribbon (Cosmic Set)', cost: 50, currency: 'gems', primaryColor: 0xf472b6, emissive: 0xec4899 },
+  { id: 'trail_gold', category: 'trails', name: 'Midas Dust', emoji: '✨', desc: 'Golden comet (Midas Set)', cost: 85, currency: 'gems', primaryColor: 0xfde047, emissive: 0xeab308 },
 
   // ===== BATTER SKINS =====
-  {
-    id: 'skin_blue',
-    category: 'skins',
-    name: 'Park Blue',
-    emoji: '🔵',
-    desc: 'Original hero',
-    cost: 0,
-    currency: 'coins',
-    primaryColor: 0x0ea5e9,
-  },
-  {
-    id: 'skin_emerald',
-    category: 'skins',
-    name: 'Turbo Mint',
-    emoji: '🟢',
-    desc: 'Fresh park ace',
-    cost: 280,
-    currency: 'coins',
-    primaryColor: 0x10b981,
-  },
-  {
-    id: 'skin_violet',
-    category: 'skins',
-    name: 'Hyper Violet',
-    emoji: '🟣',
-    desc: 'Neon slugger',
-    cost: 680,
-    currency: 'coins',
-    primaryColor: 0x8b5cf6,
-  },
-  {
-    id: 'skin_gold',
-    category: 'skins',
-    name: 'MVP Gold',
-    emoji: '🏆',
-    desc: 'Shining champion',
-    cost: 42,
-    currency: 'gems',
-    primaryColor: 0xfbbf24,
-    emissive: 0x92400e,
-  },
-  {
-    id: 'skin_shadow',
-    category: 'skins',
-    name: 'Shadow Pro',
-    emoji: '🥷',
-    desc: 'Stealth obsidian',
-    cost: 70,
-    currency: 'gems',
-    primaryColor: 0x1e293b,
-    emissive: 0x38bdf8,
-  },
+  { id: 'skin_blue', category: 'skins', name: 'Park Blue', emoji: '🔵', desc: 'Original hero', cost: 0, currency: 'coins', primaryColor: 0x0ea5e9 },
+  { id: 'skin_emerald', category: 'skins', name: 'Turbo Mint', emoji: '🟢', desc: 'Fresh park ace', cost: 280, currency: 'coins', primaryColor: 0x10b981 },
+  { id: 'skin_violet', category: 'skins', name: 'Hyper Violet', emoji: '🟣', desc: 'Neon slugger', cost: 680, currency: 'coins', primaryColor: 0x8b5cf6 },
+  { id: 'skin_gold', category: 'skins', name: 'MVP Gold', emoji: '🏆', desc: 'Shining champion', cost: 42, currency: 'gems', primaryColor: 0xfbbf24, emissive: 0x92400e },
+  { id: 'skin_shadow', category: 'skins', name: 'Shadow Pro', emoji: '🥷', desc: 'Stealth obsidian', cost: 70, currency: 'gems', primaryColor: 0x1e293b, emissive: 0x38bdf8 },
 ];
 
 const SAVE_KEY = 'mega_bat_rush_save_v2';
@@ -446,24 +336,29 @@ export function createInitialMissions(): Mission[] {
     { id: 'm_dist', type: 'distance', title: 'Hit a ball 80m', target: 80, progress: 0, rewardGems: 12, tier: 1 },
     { id: 'm_perf', type: 'perfects', title: 'Land 2 Perfect Hits', target: 2, progress: 0, rewardGems: 16, tier: 1 },
     { id: 'm_upg', type: 'upgrades', title: 'Buy 3 Upgrades', target: 3, progress: 0, rewardGems: 12, tier: 1 },
-    { id: 'm_bon', type: 'bonuses', title: 'Hit 2 Pads or Rings', target: 2, progress: 0, rewardGems: 14, tier: 1 },
+    { id: 'm_bon', type: 'bonuses', title: 'Hit 2 Pads, Taxis or Rings', target: 2, progress: 0, rewardGems: 14, tier: 1 },
   ];
 }
 
 export function createDefaultSave(): GameSave {
   return {
+    playerName: 'Slugger',
     coins: 45,
     gems: 15,
     bestDistance: 0,
     batLevel: 1,
     muscleLevel: 1,
     incomeLevel: 1,
+    leagueTier: 0,
     combo: 0,
     totalSwings: 0,
     totalPerfects: 0,
     totalUpgrades: 0,
     totalBonuses: 0,
     totalCoinsEarned: 0,
+    bossDefeats: 0,
+    wallDamage: {},
+    brokenWalls: [],
     ownedItems: ['bat_wood', 'helmet_cap', 'trail_classic', 'skin_blue'],
     equippedBat: 'bat_wood',
     equippedHelmet: 'helmet_cap',
@@ -486,6 +381,8 @@ export function loadSave(): GameSave {
       ...def,
       ...parsed,
       ownedItems: Array.isArray(parsed.ownedItems) ? parsed.ownedItems : def.ownedItems,
+      brokenWalls: Array.isArray(parsed.brokenWalls) ? parsed.brokenWalls : [],
+      wallDamage: parsed.wallDamage && typeof parsed.wallDamage === 'object' ? parsed.wallDamage : {},
       missions: Array.isArray(parsed.missions) && parsed.missions.length ? parsed.missions : def.missions,
       activePowerups: parsed.activePowerups && typeof parsed.activePowerups === 'object' ? parsed.activePowerups : {},
     };
@@ -500,6 +397,47 @@ export function saveGame(state: GameSave): void {
   } catch {
     // ignore storage quota errors
   }
+}
+
+export function parseRivalFromURL(): RivalChallenge | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const dist = Number(params.get('dist'));
+    const name = (params.get('rival') || '').trim().slice(0, 16);
+    if (name && Number.isFinite(dist) && dist >= 10) {
+      return { name, distance: Math.round(dist), beaten: false };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+export function getActiveGearSet(state: GameSave): GearSetBonus | null {
+  return (
+    GEAR_SETS.find(
+      (s) =>
+        state.equippedHelmet === s.helmetId &&
+        state.equippedBat === s.batId &&
+        state.equippedTrail === s.trailId
+    ) || null
+  );
+}
+
+export function getCurrentLeague(state: GameSave): LeagueDef {
+  return LEAGUES[Math.min(LEAGUES.length - 1, state.leagueTier)] || LEAGUES[0];
+}
+
+export function getNextLeague(state: GameSave): LeagueDef | null {
+  return LEAGUES[state.leagueTier + 1] || null;
+}
+
+export function getWallCoinMultiplier(state: GameSave): number {
+  let mult = 1;
+  for (const w of WALLS) {
+    if (state.brokenWalls.includes(w.id)) mult += w.coinMultBonus;
+  }
+  return Number(mult.toFixed(2));
 }
 
 export function getUpgradeCost(level: number, base = 25, growth = 1.22): number {
@@ -549,7 +487,7 @@ export function advanceMission(m: Mission): Mission {
     }
     case 'bonuses': {
       const target = m.target + 2;
-      return { ...m, tier: nextTier, target, progress: 0, title: `Hit ${target} Pads or Rings`, rewardGems: 12 + nextTier * 5 };
+      return { ...m, tier: nextTier, target, progress: 0, title: `Hit ${target} Pads, Taxis or Rings`, rewardGems: 12 + nextTier * 5 };
     }
     default:
       return { ...m, tier: nextTier, target: m.target + 5, progress: 0, title: `Complete ${m.target + 5} Swings`, rewardGems: 15 + nextTier * 5 };

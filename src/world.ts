@@ -1,15 +1,32 @@
 import * as THREE from 'three';
-import { GameSave, getEquippedItem, ShopItem } from './state';
+import {
+  BossDef,
+  GameSave,
+  getEquippedItem,
+  RivalChallenge,
+  ShopItem,
+  WALLS,
+  WallDef,
+} from './state';
 
 export interface InteractiveProp {
   id: number;
-  type: 'pad' | 'barrel' | 'ring';
+  type: 'pad' | 'barrel' | 'ring' | 'taxi' | 'drone';
   mesh: THREE.Object3D;
   x: number;
   y: number;
   z: number;
   radius: number;
   triggered: boolean;
+  moveSpeed?: number;
+  moveDir?: number;
+  baseY?: number;
+}
+
+export interface WallVisual {
+  def: WallDef;
+  group: THREE.Group;
+  signMesh: THREE.Mesh;
 }
 
 interface Particle {
@@ -73,6 +90,9 @@ export class GameWorld {
   public targetRing!: THREE.Mesh;
   public shockwaveRing!: THREE.Mesh;
   public bestFlag!: THREE.Group;
+  public rivalFlag!: THREE.Group;
+  private wallVisuals: Map<string, WallVisual> = new Map();
+  private pitcherAura!: THREE.Mesh;
 
   private skyMesh!: THREE.Mesh;
   private sunLight!: THREE.DirectionalLight;
@@ -112,6 +132,9 @@ export class GameWorld {
     gatePost: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 }),
     shoe: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 }),
     glove: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8 }),
+    taxiYellow: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 }),
+    taxiGlass: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, metalness: 0.4 }),
+    dronePink: new THREE.MeshStandardMaterial({ color: 0xec4899, emissive: 0xdb2777, emissiveIntensity: 0.45, roughness: 0.25 }),
   };
 
   constructor(canvas: HTMLCanvasElement, save: GameSave) {
@@ -141,6 +164,8 @@ export class GameWorld {
     this.createCharacters(save);
     this.createBallAndFX(save);
     this.createBestFlag(save.bestDistance);
+    this.createRivalFlag(null);
+    this.createWalls(save);
     this.ensureChunksAround(0, !!save.activePowerups.superbounce);
   }
 
@@ -603,9 +628,70 @@ export class GameWorld {
       shape: 'cap',
     });
     this.pitcher.helmetMount.add(pitcherCap);
+    this.pitcher.helmetMesh = pitcherCap;
+
+    // Glowing aura ring under pitcher when a Boss steps on the mound!
+    this.pitcherAura = new THREE.Mesh(
+      new THREE.RingGeometry(0.95, 1.35, 24),
+      new THREE.MeshBasicMaterial({ color: 0xf97316, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+    );
+    this.pitcherAura.rotation.x = -Math.PI / 2;
+    this.pitcherAura.position.set(0.05, 0.23, -14.5);
+    this.pitcherAura.visible = false;
+    this.scene.add(this.pitcherAura);
+
     this.scene.add(this.pitcher.root);
 
     this.applyAppearance(save);
+  }
+
+  public setPitcherTheme(boss: BossDef | null): void {
+    if (this.pitcher.helmetMesh) {
+      this.pitcher.helmetMount.remove(this.pitcher.helmetMesh);
+    }
+    if (boss) {
+      this.pitcher.material.color.setHex(boss.color);
+      this.pitcher.material.emissive.setHex(boss.hatColor);
+      this.pitcher.material.emissiveIntensity = 0.28;
+      this.pitcher.root.scale.setScalar(1.16);
+      const hat = this.buildHelmetMesh({
+        id: 'boss_hat',
+        category: 'helmets',
+        name: boss.name,
+        emoji: boss.emoji,
+        desc: '',
+        cost: 0,
+        currency: 'coins',
+        primaryColor: boss.hatColor,
+        secondaryColor: 0xffffff,
+        emissive: boss.hatColor,
+        shape: boss.id === 'emperor' ? 'crown' : boss.id === 'phantom' ? 'visor' : 'mohawk',
+      });
+      this.pitcher.helmetMount.add(hat);
+      this.pitcher.helmetMesh = hat;
+      (this.pitcherAura.material as THREE.MeshBasicMaterial).color.setHex(boss.hatColor);
+      this.pitcherAura.visible = true;
+    } else {
+      this.pitcher.material.color.setHex(0xef233c);
+      this.pitcher.material.emissive.setHex(0x000000);
+      this.pitcher.material.emissiveIntensity = 0;
+      this.pitcher.root.scale.setScalar(1.0);
+      const cap = this.buildHelmetMesh({
+        id: 'pitcher_cap',
+        category: 'helmets',
+        name: 'Cap',
+        emoji: '🧢',
+        desc: '',
+        cost: 0,
+        currency: 'coins',
+        primaryColor: 0xb91c1c,
+        secondaryColor: 0xffffff,
+        shape: 'cap',
+      });
+      this.pitcher.helmetMount.add(cap);
+      this.pitcher.helmetMesh = cap;
+      this.pitcherAura.visible = false;
+    }
   }
 
   public getPitcherHandWorldPos(out: THREE.Vector3): THREE.Vector3 {
@@ -771,6 +857,116 @@ export class GameWorld {
       this.bestFlag.position.set(0, 0, -bestDistance);
     } else {
       this.bestFlag.visible = false;
+    }
+  }
+
+  private createRivalFlag(rival: RivalChallenge | null): void {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 5.8, 8),
+      new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.6, roughness: 0.25 })
+    );
+    pole.position.set(-3.2, 2.9, 0);
+    g.add(pole);
+
+    const sign = new THREE.Mesh(
+      new THREE.BoxGeometry(3.4, 1.05, 0.14),
+      new THREE.MeshStandardMaterial({
+        map: this.getSignTexture('🚩 RIVAL', '#dc2626', '#ffffff'),
+        emissive: 0x991b1b,
+        emissiveIntensity: 0.35,
+      })
+    );
+    sign.position.set(-3.2, 5.2, 0);
+    sign.name = 'rivalSign';
+    g.add(sign);
+
+    const line = new THREE.Mesh(
+      new THREE.BoxGeometry(6.2, 0.09, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0xef4444 })
+    );
+    line.position.set(0, 0.065, 0);
+    g.add(line);
+
+    this.rivalFlag = g;
+    this.rivalFlag.visible = false;
+    this.scene.add(g);
+    if (rival) this.updateRivalFlag(rival);
+  }
+
+  public updateRivalFlag(rival: RivalChallenge | null): void {
+    if (!rival) {
+      this.rivalFlag.visible = false;
+      return;
+    }
+    this.rivalFlag.visible = true;
+    this.rivalFlag.position.set(0, 0, -rival.distance);
+    const sign = this.rivalFlag.getObjectByName('rivalSign') as THREE.Mesh | undefined;
+    if (sign) {
+      (sign.material as THREE.MeshStandardMaterial).map = this.getSignTexture(
+        `🚩 ${rival.name.toUpperCase()}`,
+        '#dc2626',
+        '#ffffff'
+      );
+      (sign.material as THREE.MeshStandardMaterial).needsUpdate = true;
+    }
+  }
+
+  private createWalls(save: GameSave): void {
+    for (const def of WALLS) {
+      const group = new THREE.Group();
+      group.position.set(0, 0, -def.distance);
+
+      // Left & right thick pillars
+      const pillarMat = new THREE.MeshStandardMaterial({ color: def.accent, roughness: 0.35, metalness: 0.3 });
+      for (const side of [-1, 1]) {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 10, 0.9), pillarMat);
+        pillar.position.set(side * 3.5, 5, 0);
+        pillar.castShadow = true;
+        group.add(pillar);
+      }
+
+      // Breakable barrier panel across the walkway
+      const panelMat = new THREE.MeshStandardMaterial({
+        color: def.color,
+        emissive: def.color,
+        emissiveIntensity: 0.22,
+        transparent: true,
+        opacity: 0.86,
+        roughness: 0.25,
+      });
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 8.8, 0.55), panelMat);
+      panel.position.set(0, 4.4, 0);
+      panel.castShadow = true;
+      group.add(panel);
+
+      // HP & Name banner on top
+      const remHp = Math.max(0, def.maxHp - (save.wallDamage[def.id] || 0));
+      const signMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(7.2, 1.45, 0.3),
+        new THREE.MeshStandardMaterial({
+          map: this.getSignTexture(`${def.name} ${remHp}HP`, '#dc2626', '#fef08a'),
+        })
+      );
+      signMesh.position.set(0, 9.6, 0);
+      group.add(signMesh);
+
+      group.visible = !save.brokenWalls.includes(def.id);
+      this.scene.add(group);
+      this.wallVisuals.set(def.id, { def, group, signMesh });
+    }
+  }
+
+  public syncWalls(save: GameSave): void {
+    for (const [id, wv] of this.wallVisuals.entries()) {
+      const broken = save.brokenWalls.includes(id);
+      wv.group.visible = !broken;
+      if (!broken) {
+        const remHp = Math.max(1, wv.def.maxHp - (save.wallDamage[id] || 0));
+        const mat = wv.signMesh.material as THREE.MeshStandardMaterial;
+        mat.map = this.getSignTexture(`${wv.def.name} ${remHp}HP`, '#dc2626', '#fef08a');
+        mat.needsUpdate = true;
+      }
     }
   }
 
@@ -1033,6 +1229,60 @@ export class GameWorld {
           triggered: false,
         });
       }
+
+      // Moving Yellow Taxi crossing the street every 3rd chunk (starting past 80m)!
+      if (index >= 2 && index % 3 === 1) {
+        const tz = zStart - 20;
+        const taxiGroup = new THREE.Group();
+        const body = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiYellow);
+        body.scale.set(2.2, 0.72, 1.2);
+        body.position.y = 0.55;
+        body.castShadow = true;
+        const cabin = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiGlass);
+        cabin.scale.set(1.2, 0.55, 1.05);
+        cabin.position.y = 1.1;
+        taxiGroup.add(body, cabin);
+        const startX = (rand(71) - 0.5) * 4;
+        taxiGroup.position.set(startX, 0, tz);
+        group.add(taxiGroup);
+        props.push({
+          id: propIdCounter++,
+          type: 'taxi',
+          mesh: taxiGroup,
+          x: startX,
+          y: 0.85,
+          z: tz,
+          radius: 2.05,
+          triggered: false,
+          moveSpeed: 3.2 + rand(73) * 2.0,
+          moveDir: rand(79) > 0.5 ? 1 : -1,
+        });
+      }
+
+      // Floating Gem Pinata Drone every 4th chunk (rare high-value sky target!)
+      if (index >= 2 && index % 4 === 0) {
+        const dz = zStart - 22;
+        const dx = (rand(83) - 0.5) * 3.0;
+        const dy = 4.6 + rand(89) * 4.0;
+        const droneGroup = new THREE.Group();
+        const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.75, 0), this.sharedMat.dronePink);
+        const halo = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.1, 8, 18), this.sharedMat.ringGold);
+        halo.rotation.x = Math.PI / 2;
+        droneGroup.add(core, halo);
+        droneGroup.position.set(dx, dy, dz);
+        group.add(droneGroup);
+        props.push({
+          id: propIdCounter++,
+          type: 'drone',
+          mesh: droneGroup,
+          x: dx,
+          y: dy,
+          z: dz,
+          radius: 2.15,
+          triggered: false,
+          baseY: dy,
+        });
+      }
     }
 
     return { index, zStart, group, props };
@@ -1118,10 +1368,25 @@ export class GameWorld {
 
     for (const chunk of this.chunks.values()) {
       for (const p of chunk.props) {
-        if (!p.triggered && p.type === 'ring') {
+        if (p.triggered) continue;
+        if (p.type === 'ring') {
           p.mesh.rotation.y = time * 2.2;
+        } else if (p.type === 'taxi' && p.moveSpeed && p.moveDir) {
+          p.x += p.moveSpeed * p.moveDir * dt;
+          if (p.x > 3.6) p.moveDir = -1;
+          if (p.x < -3.6) p.moveDir = 1;
+          p.mesh.position.x = p.x;
+        } else if (p.type === 'drone' && p.baseY !== undefined) {
+          p.y = p.baseY + Math.sin(time * 3.0 + p.id) * 0.75;
+          p.mesh.position.y = p.y;
+          p.mesh.rotation.y = time * 2.6;
         }
       }
+    }
+
+    if (this.pitcherAura.visible) {
+      const s = 1 + Math.sin(time * 6) * 0.1;
+      this.pitcherAura.scale.setScalar(s);
     }
 
     if (this.shockwaveRing.visible) {

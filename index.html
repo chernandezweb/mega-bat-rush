@@ -33,6 +33,12 @@
         <span>BEST: <strong id="best-distance">0m</strong></span>
         <span class="combo-pill hidden" id="combo-pill">🔥 x1</span>
       </div>
+
+      <div class="status-pills-row" id="status-pills-row">
+        <span class="league-chip" id="league-chip">⚾ Rookie Park</span>
+        <span class="boss-chip" id="boss-chip">⚔️ Boss in 4</span>
+      </div>
+      <div class="rival-banner hidden" id="rival-banner">🚩 BEAT RIVAL: 100m</div>
     </div>
 
     <!-- LEFT SIDE CONTROLS -->
@@ -57,6 +63,11 @@
       </button>
       <button class="side-btn shop-btn" id="btn-shop" aria-label="Shop" title="Shop">
         <span class="side-emoji">🛒</span>
+      </button>
+      <button class="side-btn league-btn" id="btn-league" aria-label="League Prestige" title="League">
+        <span class="side-emoji">🏆</span>
+        <span class="side-tag">LEAGUE</span>
+        <span class="quest-check hidden" id="league-badge">!</span>
       </button>
     </div>
 
@@ -95,7 +106,7 @@
       <div class="flight-coins-live" id="flight-coins-live">+0 🪙</div>
       <div class="slam-prompt" id="slam-prompt">
         <div class="slam-bar-bg"><div class="slam-bar-fill" id="slam-bar-fill"></div></div>
-        <span id="slam-text">⚡ TAP FOR POWER SLAM!</span>
+        <span id="slam-text">⚡ TAP TO SLAM • DRAG TO STEER!</span>
       </div>
     </div>
 
@@ -122,6 +133,7 @@
             <span class="r-val" id="result-bonuses">3</span>
           </div>
         </div>
+        <div class="result-milestones hidden" id="result-milestones"></div>
         <div class="result-reward-box">
           <div class="reward-line">
             <span class="coin-icon sm">C</span>
@@ -132,11 +144,28 @@
             <span class="reward-amount" id="result-gems">+5</span>
           </div>
         </div>
-        <div class="result-actions">
+        <button class="btn-chest hidden" id="btn-open-chest">🎁 OPEN MYSTERY CHEST!</button>
+        <div class="chest-loot hidden" id="chest-loot"></div>
+
+        <div class="mult-reel-wrap" id="mult-reel-wrap">
+          <div class="mult-reel-track">
+            <span class="mr-seg mr-15">1.5×</span>
+            <span class="mr-seg mr-2">2×</span>
+            <span class="mr-seg mr-5">5×</span>
+            <span class="mr-seg mr-2">2×</span>
+            <span class="mr-seg mr-15">1.5×</span>
+            <div class="mult-reel-needle" id="mult-reel-needle"></div>
+          </div>
           <button class="btn-bonus-2x" id="btn-bonus-2x">
-            <span>⚡ 2X COINS SPIN!</span>
+            <span>🎯 STOP REEL FOR UP TO 5×!</span>
           </button>
-          <button class="btn-continue" id="btn-continue">NEXT AT-BAT</button>
+        </div>
+
+        <div class="result-actions">
+          <div class="result-btn-row">
+            <button class="btn-share" id="btn-share">⚔️ CHALLENGE</button>
+            <button class="btn-continue" id="btn-continue">NEXT AT-BAT</button>
+          </div>
         </div>
       </div>
     </div>
@@ -204,7 +233,17 @@
           <button class="shop-tab" data-tab="trails">Trails</button>
           <button class="shop-tab" data-tab="skins">Batter</button>
         </div>
+        <div class="set-bonus-bar" id="set-bonus-bar"></div>
         <div class="shop-grid" id="shop-grid"></div>
+      </div>
+
+      <!-- LEAGUE PRESTIGE MODAL -->
+      <div class="modal-panel hidden" id="modal-league">
+        <div class="modal-header">
+          <h2>🏆 LEAGUE PRESTIGE</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <div id="league-content"></div>
       </div>
 
       <!-- MISSIONS MODAL -->
@@ -224,6 +263,10 @@
           <button class="modal-close" data-close>✕</button>
         </div>
         <div class="settings-list">
+          <label class="setting-row">
+            <span>🏷️ Player Name</span>
+            <input type="text" id="input-player-name" maxlength="14" class="name-input" placeholder="Slugger" />
+          </label>
           <label class="setting-row">
             <span>🔊 Sound Effects</span>
             <input type="checkbox" id="toggle-sound" checked />

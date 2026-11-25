@@ -1,9 +1,16 @@
 import * as THREE from 'three';
 import {
+  BOSSES,
+  BossDef,
   GameSave,
+  getActiveGearSet,
+  getCurrentLeague,
   getEquippedItem,
   getIncomeMultiplier,
+  getWallCoinMultiplier,
+  RivalChallenge,
   saveGame,
+  WALLS,
 } from './state';
 import { GameWorld } from './world';
 import { sound } from './audio';
@@ -21,6 +28,10 @@ export interface RunResult {
   gemsEarned: number;
   isNewRecord: boolean;
   wasGolden: boolean;
+  bossBeaten: BossDef | null;
+  chestsWon: number;
+  wallBrokenName: string | null;
+  rivalBeatenName: string | null;
 }
 
 export interface GameCallbacks {
@@ -43,6 +54,8 @@ export class BaseballGame {
   public world: GameWorld;
   public save: GameSave;
   public phase: GamePhase = 'IDLE';
+  public rival: RivalChallenge | null = null;
+  public currentBoss: BossDef | null = null;
 
   private cb: GameCallbacks;
   private rafId = 0;
@@ -69,26 +82,34 @@ export class BaseballGame {
   // Ball physics
   private ballPos = new THREE.Vector3();
   private ballVel = new THREE.Vector3();
+  private steerTarget = 0; // -1..1 from drag or arrow keys
   private maxRunSpeed = 30;
   private maxHeight = 0;
   private bounces = 0;
   private bonuses = 0;
   private boostHitsThisRun = 0;
   private bonusCoins = 0;
+  private bonusGems = 0;
+  private chestsWon = 0;
+  private wallBrokenName: string | null = null;
+  private rivalBeatenName: string | null = null;
   private hitQuality: HitQuality = 'GOOD';
   private passedRecordThisRun = false;
   private slamsLeft = 1;
   private isSlamming = false;
   private runActivePowerups: Record<string, boolean> = {};
+  private hitWallIdsThisRun: Set<string> = new Set();
 
   // Camera smoothing
   private camPos = new THREE.Vector3(-0.15, 2.5, 4.55);
   private camLook = new THREE.Vector3(0.0, 1.45, -14);
 
-  constructor(canvas: HTMLCanvasElement, save: GameSave, cb: GameCallbacks) {
+  constructor(canvas: HTMLCanvasElement, save: GameSave, rival: RivalChallenge | null, cb: GameCallbacks) {
     this.save = save;
+    this.rival = rival;
     this.cb = cb;
     this.world = new GameWorld(canvas, save);
+    this.world.updateRivalFlag(rival);
     sound.enabled = save.soundEnabled;
     sound.haptics = save.hapticsEnabled;
 
@@ -105,9 +126,23 @@ export class BaseballGame {
     this.world.resize();
   }
 
+  public setSteer(val: number): void {
+    this.steerTarget = THREE.MathUtils.clamp(val, -1, 1);
+  }
+
   public refreshAppearance(): void {
     this.world.applyAppearance(this.save);
     this.world.updateBestFlag(this.save.bestDistance);
+    this.world.syncWalls(this.save);
+  }
+
+  public getSwingsUntilBoss(): number {
+    const rem = 5 - ((this.save.totalSwings + 1) % 5);
+    return rem === 5 ? 0 : rem;
+  }
+
+  public isNextSwingBoss(): boolean {
+    return (this.save.totalSwings + 1) % 5 === 0;
   }
 
   public handlePrimaryTap(): void {
@@ -128,8 +163,17 @@ export class BaseballGame {
     this.pitchProgress = 0;
     this.releaseCaptured = false;
     this.isSlamming = false;
-    this.slamsLeft = 1;
+    this.steerTarget = 0;
     this.shakeIntensity = 0;
+
+    // Preview upcoming Boss Pitcher on the mound when Boss Duel is ready!
+    if (this.isNextSwingBoss()) {
+      const bossIdx = Math.floor(this.save.totalSwings / 5) % BOSSES.length;
+      this.currentBoss = BOSSES[bossIdx];
+    } else {
+      this.currentBoss = null;
+    }
+    this.world.setPitcherTheme(this.currentBoss);
 
     this.world.ball.visible = false;
     this.world.ballShadow.visible = false;
@@ -141,6 +185,7 @@ export class BaseballGame {
       this.world.ensureChunksAround(0, !!this.save.activePowerups.superbounce);
     }
     this.world.updateBestFlag(this.save.bestDistance);
+    this.world.syncWalls(this.save);
     this.world.updateBiomeVisuals(0);
 
     this.camPos.set(-0.15, 2.5, 4.55);
@@ -166,18 +211,43 @@ export class BaseballGame {
     this.bonuses = 0;
     this.boostHitsThisRun = 0;
     this.bonusCoins = 0;
+    this.bonusGems = 0;
+    this.chestsWon = 0;
+    this.wallBrokenName = null;
+    this.rivalBeatenName = null;
     this.passedRecordThisRun = false;
     this.isSlamming = false;
+    this.steerTarget = 0;
+    this.hitWallIdsThisRun.clear();
+
+    const activeSet = getActiveGearSet(this.save);
+    const league = getCurrentLeague(this.save);
 
     this.runActivePowerups = { ...this.save.activePowerups };
-    this.slamsLeft = this.runActivePowerups.superbounce ? 2 : 1;
+    // League 2+ Relic: Free Fireball every 4th swing!
+    if (league.tier >= 2 && (this.save.totalSwings + 1) % 4 === 0) {
+      this.runActivePowerups.fireball = true;
+    }
 
+    // Slams: 1 base + 1 Hyper Bounce + 1 Cosmic Set + 1 Hall of Fame Relic
+    this.slamsLeft =
+      1 +
+      (this.runActivePowerups.superbounce ? 1 : 0) +
+      (activeSet?.id === 'cosmic' ? 1 : 0) +
+      (league.tier >= 4 ? 1 : 0);
+
+    const midasGolden = activeSet?.id === 'midas' && (this.save.totalSwings + 1) % 3 === 0;
     const isGolden =
       !!this.runActivePowerups.goldenpitch ||
-      (this.save.totalSwings > 0 && (this.save.totalSwings + 1) % 5 === 0);
+      midasGolden ||
+      this.currentBoss?.id === 'emperor';
     this.pitchIsGolden = isGolden;
 
-    if (isGolden) {
+    if (this.currentBoss) {
+      this.pitchLabel = `${this.currentBoss.emoji} BOSS: ${this.currentBoss.pitchName}`;
+      this.pitchDuration = this.currentBoss.id === 'flamethrower' ? 0.84 : 0.96;
+      this.pitchCurve = this.currentBoss.id === 'knuckle' ? 1.25 : 0;
+    } else if (isGolden) {
       this.pitchLabel = '✨ GOLDEN PITCH (2.5×)';
       this.pitchDuration = 0.94;
       this.pitchCurve = 0;
@@ -199,8 +269,8 @@ export class BaseballGame {
     this.world.targetRing.visible = true;
 
     const ballMat = this.world.ball.material as THREE.MeshStandardMaterial;
-    ballMat.emissive.setHex(isGolden ? 0xf59e0b : 0x000000);
-    ballMat.emissiveIntensity = isGolden ? 0.6 : 0;
+    ballMat.emissive.setHex(isGolden ? 0xf59e0b : this.currentBoss ? this.currentBoss.hatColor : 0x000000);
+    ballMat.emissiveIntensity = isGolden ? 0.65 : this.currentBoss ? 0.4 : 0;
 
     this.cb.onPhaseChange('PITCHING');
     this.cb.onPitchUpdate(0, this.pitchLabel, this.pitchIsGolden);
@@ -213,8 +283,8 @@ export class BaseballGame {
 
     const helmetItem = getEquippedItem(this.save, 'helmets');
     const batItem = getEquippedItem(this.save, 'bats');
+    const league = getCurrentLeague(this.save);
 
-    // Sweet spot centered at 0.88; scales with Bat level, Helmet perk, and Giant Sweet Spot powerup!
     const sweetMult =
       (1 + (helmetItem.sweetSpotBonus || 0)) * (this.runActivePowerups.sweetspot ? 1.85 : 1.0);
     const batSweetAdd = Math.min(0.045, (this.save.batLevel - 1) * 0.0025);
@@ -227,13 +297,11 @@ export class BaseballGame {
 
     let qualityMult = 0.68;
     let launchAngleDeg = 27;
-    let color = '#4ade80';
 
     if (diff <= (0.06 + batSweetAdd * 0.4) * sweetMult) {
       this.hitQuality = 'PERFECT';
       qualityMult = 1.32;
       launchAngleDeg = 35;
-      color = '#facc15';
       this.save.combo += 1;
       this.save.totalPerfects += 1;
       this.recordMissionProgress('perfects', 1);
@@ -250,7 +318,6 @@ export class BaseballGame {
       this.hitQuality = 'GREAT';
       qualityMult = 1.06;
       launchAngleDeg = 31;
-      color = '#38bdf8';
       this.hitstopTimer = 0.045;
       this.shakeIntensity = 0.22;
       this.cb.onCallout('GREAT HIT!', '#38bdf8', true);
@@ -260,11 +327,10 @@ export class BaseballGame {
       this.hitQuality = 'GOOD';
       qualityMult = 0.84;
       launchAngleDeg = 26;
-      color = '#4ade80';
       this.save.combo = 0;
       this.hitstopTimer = 0.02;
       this.shakeIntensity = 0.1;
-      this.cb.onCallout('GOOD!', color, false);
+      this.cb.onCallout('GOOD!', '#4ade80', false);
       this.world.spawnBurst(this.ballPos, 0xffffff, 10, 7);
     } else {
       this.hitQuality = 'WEAK';
@@ -279,33 +345,46 @@ export class BaseballGame {
 
     sound.playBatCrack(this.hitQuality);
 
+    // Boss defeat check!
+    if (this.currentBoss && this.hitQuality !== 'WEAK') {
+      this.save.bossDefeats += 1;
+      this.chestsWon += 1;
+      this.cb.onCallout(`⚔️ BOSS CRUSHED! +🎁`, '#facc15', true);
+    }
+
     // Consume powerups
     this.save.totalSwings += 1;
     this.save.activePowerups = {};
     saveGame(this.save);
     this.cb.onStateChanged();
 
-    // Well-paced progression curve:
-    // Lv 1 Bat + Lv 1 Muscle -> GOOD ~45m, GREAT ~65m, PERFECT ~90m!
-    // Upgrading Bat, Muscle, Helmets, Bats & Powerups visibly pushes you to 150m -> 300m -> 600m -> 1200m+!
     const equipPower = 1 + (batItem.powerBonus || 0) + (helmetItem.powerBonus || 0);
     const upgradeFactor = 1 + (this.save.batLevel - 1) * 0.08 + (this.save.muscleLevel - 1) * 0.095;
     const comboBonus = 1 + Math.min(0.35, this.save.combo * 0.05);
     const fireballBonus = this.runActivePowerups.fireball ? 1.28 : 1.0;
+    const heavyBallFactor = this.currentBoss?.id === 'emperor' ? 0.9 : 1.0;
 
     const launchSpeed =
-      22.5 * Math.pow(upgradeFactor, 0.56) * qualityMult * equipPower * comboBonus * fireballBonus;
-    this.maxRunSpeed = launchSpeed * 1.15;
+      22.5 *
+      Math.pow(upgradeFactor, 0.56) *
+      qualityMult *
+      equipPower *
+      comboBonus *
+      fireballBonus *
+      league.powerMult *
+      heavyBallFactor;
+    this.maxRunSpeed = launchSpeed * 1.18;
 
     const angleRad = (launchAngleDeg * Math.PI) / 180;
-    const timingBias = (this.pitchProgress - 0.88) * 3.0;
+    const timingBias = (this.pitchProgress - 0.88) * 2.6;
     this.ballVel.set(
-      THREE.MathUtils.clamp(timingBias, -1.4, 1.4),
+      THREE.MathUtils.clamp(timingBias, -1.2, 1.2),
       Math.sin(angleRad) * launchSpeed,
       -Math.cos(angleRad) * launchSpeed
     );
 
     this.ballPos.set(0.05, 1.32, 0.1);
+    this.world.ball.visible = true;
     this.world.ball.position.copy(this.ballPos);
     this.world.targetRing.visible = false;
     this.world.resetTrail();
@@ -324,6 +403,7 @@ export class BaseballGame {
     this.hitQuality = 'MISS';
     this.save.combo = 0;
     this.world.targetRing.visible = false;
+    this.world.ball.visible = true;
     sound.playMiss();
     this.cb.onCallout(label, '#ef4444', true);
     this.cb.onStateChanged();
@@ -336,10 +416,10 @@ export class BaseballGame {
   }
 
   private tryPowerSlam(): void {
-    if (this.isSlamming || this.slamsLeft <= 0 || this.ballPos.y < 2.2) return;
+    if (this.isSlamming || this.slamsLeft <= 0 || this.ballPos.y < 2.1) return;
     this.isSlamming = true;
     this.slamsLeft -= 1;
-    this.ballVel.y = Math.min(this.ballVel.y, -22);
+    this.ballVel.y = Math.min(this.ballVel.y, -23);
     sound.playSlam();
     this.cb.onCallout('⚡ POWER SLAM!', '#38bdf8', false);
     this.world.spawnBurst(this.ballPos, 0x38bdf8, 14, 8);
@@ -369,16 +449,28 @@ export class BaseballGame {
 
     const batItem = getEquippedItem(this.save, 'bats');
     const helmetItem = getEquippedItem(this.save, 'helmets');
-    const gearCoinMult = 1 + (batItem.coinBonus || 0) + (helmetItem.coinBonus || 0);
+    const activeSet = getActiveGearSet(this.save);
+    const league = getCurrentLeague(this.save);
+
+    const gearCoinMult =
+      (1 + (batItem.coinBonus || 0) + (helmetItem.coinBonus || 0)) *
+      (activeSet?.id === 'midas' ? 1.6 : 1.0);
+    const wallCoinMult = getWallCoinMultiplier(this.save);
     const incomeMult = getIncomeMultiplier(this.save.incomeLevel);
     const qualityBonus =
       this.hitQuality === 'PERFECT' ? 1.45 : this.hitQuality === 'GREAT' ? 1.18 : 1.0;
-    const goldenMult = this.pitchIsGolden ? 2.5 : 1.0;
+    const bossOrGoldenMult = this.currentBoss
+      ? this.currentBoss.coinMult
+      : this.pitchIsGolden
+      ? 2.5
+      : 1.0;
 
-    const baseCoins = Math.round(distance * 0.65 * incomeMult * gearCoinMult * qualityBonus * goldenMult);
+    const baseCoins = Math.round(
+      distance * 0.65 * incomeMult * gearCoinMult * wallCoinMult * league.coinMult * qualityBonus * bossOrGoldenMult
+    );
     const coinsEarned = Math.max(12, baseCoins + this.bonusCoins);
 
-    let gemsEarned = 0;
+    let gemsEarned = this.bonusGems;
     if (isNewRecord && distance >= 35) gemsEarned += 4;
     if (distance >= 200) gemsEarned += Math.floor(distance / 200) * 3;
     if (this.hitQuality === 'PERFECT' && this.save.combo >= 3) gemsEarned += 3;
@@ -388,6 +480,8 @@ export class BaseballGame {
     this.save.totalCoinsEarned += coinsEarned;
     this.recordMissionProgress('distance', distance);
     saveGame(this.save);
+
+    const bossBeaten = this.currentBoss && this.hitQuality !== 'WEAK' ? this.currentBoss : null;
 
     this.cb.onPhaseChange('RESULT');
     this.cb.onStateChanged();
@@ -401,6 +495,10 @@ export class BaseballGame {
       gemsEarned,
       isNewRecord,
       wasGolden: this.pitchIsGolden,
+      bossBeaten,
+      chestsWon: this.chestsWon,
+      wallBrokenName: this.wallBrokenName,
+      rivalBeatenName: this.rivalBeatenName,
     });
   }
 
@@ -435,7 +533,6 @@ export class BaseballGame {
         const w = this.pitchTimer / this.windupDuration;
         this.posePitcherWindup(w);
         this.poseBatterLoad(w * 0.6);
-        // Ball stays right inside pitcher's throwing hand during windup!
         this.world.getPitcherHandWorldPos(this.ballPos);
         this.world.ball.position.copy(this.ballPos);
         this.world.ballShadow.position.set(this.ballPos.x, 0.04, this.ballPos.z);
@@ -448,17 +545,35 @@ export class BaseballGame {
           this.world.getPitcherHandWorldPos(this.pitchReleasePos);
           sound.playPitch();
         }
-        this.pitchProgress = flightTime / this.pitchDuration;
 
-        // Smooth pitching follow-through
+        // Boss Trick Pitch timing curves!
+        let rawT = flightTime / this.pitchDuration;
+        if (this.currentBoss?.id === 'flamethrower') {
+          // Turbo Splitter: slow start, blazing fast finish!
+          rawT = rawT < 0.5 ? rawT * 0.78 : 0.39 + (rawT - 0.5) * 1.38;
+        }
+        this.pitchProgress = rawT;
+
         this.posePitcherThrow(Math.min(1, 0.18 + flightTime * 3.4));
         if (!this.hasSwung) {
           this.poseBatterLoad(Math.min(1, 0.6 + this.pitchProgress * 0.5));
         }
 
-        // Interpolate ball from pitcher's actual release hand to the strike zone!
         const t = this.pitchProgress;
-        const x = THREE.MathUtils.lerp(this.pitchReleasePos.x, 0.05, t) + Math.sin(t * Math.PI) * this.pitchCurve;
+        let xOffset = Math.sin(t * Math.PI) * this.pitchCurve;
+        if (this.currentBoss?.id === 'knuckle') {
+          // Wobble knuckleball zig-zags!
+          xOffset = Math.sin(t * Math.PI * 3.2) * 0.85;
+        }
+
+        // Ghost Pitch blinks briefly invisible mid-flight!
+        if (this.currentBoss?.id === 'phantom') {
+          this.world.ball.visible = !(t > 0.32 && t < 0.64);
+        } else {
+          this.world.ball.visible = true;
+        }
+
+        const x = THREE.MathUtils.lerp(this.pitchReleasePos.x, 0.05, t) + xOffset;
         const y = THREE.MathUtils.lerp(this.pitchReleasePos.y, 1.3, t) + Math.sin(Math.min(1, t) * Math.PI) * 0.42;
         const z = THREE.MathUtils.lerp(this.pitchReleasePos.z, 0.15, t);
         this.ballPos.set(x, y, z);
@@ -513,23 +628,81 @@ export class BaseballGame {
       }
 
       const helmetItem = getEquippedItem(this.save, 'helmets');
+      const activeSet = getActiveGearSet(this.save);
+      const league = getCurrentLeague(this.save);
       const glideFactor =
-        (1 - (helmetItem.glideBonus || 0)) * (this.runActivePowerups.lowgrav ? 0.78 : 1.0);
+        (1 - (helmetItem.glideBonus || 0)) *
+        (this.runActivePowerups.lowgrav ? 0.78 : 1.0) *
+        (activeSet?.id === 'cosmic' ? 0.78 : 1.0);
 
-      // Realistic gravity & air drag so every ball slows down naturally and comes to a clear stop!
+      // Gravity & realistic air drag
       const gravity = this.isSlamming ? 42 : 24.5 * glideFactor;
       this.ballVel.y -= gravity * dt;
-      this.ballVel.z *= Math.pow(0.89, dt); // real air resistance
-      this.ballVel.x *= Math.pow(0.82, dt);
+      this.ballVel.z *= Math.pow(0.89, dt);
 
-      if (Math.abs(this.ballPos.x) > 2.2) {
-        this.ballVel.x -= Math.sign(this.ballPos.x) * 4.5 * dt;
+      // Active mid-air steering!
+      if (Math.abs(this.steerTarget) > 0.02) {
+        this.ballVel.x = THREE.MathUtils.lerp(this.ballVel.x, this.steerTarget * 7.5, dt * 7);
+      } else {
+        this.ballVel.x *= Math.pow(0.75, dt);
       }
 
+      // Soft corridor bounds
+      if (this.ballPos.x > 3.1 && this.ballVel.x > 0) this.ballVel.x *= -0.3;
+      if (this.ballPos.x < -3.1 && this.ballVel.x < 0) this.ballVel.x *= -0.3;
+
       this.ballPos.addScaledVector(this.ballVel, dt);
+      this.ballPos.x = THREE.MathUtils.clamp(this.ballPos.x, -3.2, 3.2);
       this.maxHeight = Math.max(this.maxHeight, this.ballPos.y);
 
-      // Ground bounce with clear energy loss per bounce!
+      // ===== CHECK BREAKTHROUGH WALLS! =====
+      for (const wall of WALLS) {
+        if (this.save.brokenWalls.includes(wall.id) || this.hitWallIdsThisRun.has(wall.id)) continue;
+        // Ball crosses wall plane z = -wall.distance
+        if (this.ballPos.z <= -wall.distance + 0.6 && this.ballPos.z >= -wall.distance - 2.5 && this.ballPos.y < 10.5) {
+          this.hitWallIdsThisRun.add(wall.id);
+          const speedNow = Math.abs(this.ballVel.z);
+          const dmg = Math.round(
+            speedNow * 3.1 * (this.runActivePowerups.fireball ? 1.45 : 1.0) * (this.isSlamming ? 1.3 : 1.0)
+          );
+          const prevDmg = this.save.wallDamage[wall.id] || 0;
+          const totalDmg = prevDmg + dmg;
+
+          if (totalDmg >= wall.maxHp) {
+            // SHATTERED STRAIGHT THROUGH!!
+            this.save.brokenWalls.push(wall.id);
+            this.save.wallDamage[wall.id] = wall.maxHp;
+            this.wallBrokenName = wall.worldUnlocked;
+            this.bonusGems += wall.rewardGems;
+            this.hitstopTimer = 0.14;
+            this.shakeIntensity = 0.65;
+            this.phase = 'HITSTOP';
+            this.world.syncWalls(this.save);
+            this.world.triggerShockwave(this.ballPos, wall.color);
+            this.world.spawnBurst(this.ballPos, wall.color, 36, 16);
+            this.world.spawnBurst(this.ballPos, wall.accent, 22, 13);
+            sound.playWallSmash();
+            this.cb.onCallout(`💥 ${wall.name} SHATTERED!! +${wall.rewardGems}💎`, '#facc15', true);
+            saveGame(this.save);
+            return;
+          } else {
+            // Cracked the wall — saves chip damage & bounces back dramatically!
+            this.save.wallDamage[wall.id] = totalDmg;
+            const rem = wall.maxHp - totalDmg;
+            this.ballPos.z = -wall.distance + 0.8;
+            this.ballVel.z = Math.min(7, speedNow * 0.25); // gentle bounce-back
+            this.ballVel.y = Math.max(4, this.ballVel.y * 0.4);
+            this.shakeIntensity = 0.4;
+            this.world.syncWalls(this.save);
+            this.world.spawnBurst(this.ballPos, wall.color, 20, 10);
+            sound.playExplosion();
+            this.cb.onCallout(`CRACKED! ${rem} HP LEFT!`, '#fb923c', true);
+            saveGame(this.save);
+          }
+        }
+      }
+
+      // ===== GROUND BOUNCE =====
       if (this.ballPos.y <= 0.22) {
         this.ballPos.y = 0.22;
         const impactVy = Math.abs(this.ballVel.y);
@@ -537,13 +710,14 @@ export class BaseballGame {
           this.bounces += 1;
           const bounceUpgrade = Math.min(0.08, (this.save.incomeLevel - 1) * 0.004);
           const superBounceBonus = this.runActivePowerups.superbounce ? 0.12 : 0;
-          const restitution = Math.min(0.66, 0.44 + bounceUpgrade + superBounceBonus);
+          const stormBonus = activeSet?.id === 'storm' ? 0.08 : 0;
+          const restitution = Math.min(0.7, 0.44 + bounceUpgrade + superBounceBonus + stormBonus);
 
           if (this.isSlamming) {
-            // Tactical Power Slam bounce — capped so it's fun, never infinite!
             this.isSlamming = false;
-            this.ballVel.y = Math.min(14, Math.max(8, impactVy * 0.52));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 4.2);
+            const relicMult = league.tier >= 1 ? 1.2 : 1.0;
+            this.ballVel.y = Math.min(14.5, Math.max(8, impactVy * 0.54 * relicMult));
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 4.4 * relicMult);
             this.shakeIntensity = 0.28;
             sound.playBoing();
             this.world.triggerShockwave(this.ballPos, 0x38bdf8);
@@ -551,20 +725,28 @@ export class BaseballGame {
             this.cb.onCallout('SLAM BOUNCE!', '#38bdf8', false);
           } else {
             this.ballVel.y = impactVy * restitution;
-            // Real ground friction on each bounce!
-            this.ballVel.z *= this.runActivePowerups.superbounce ? 0.84 : 0.74;
+            const friction = this.runActivePowerups.superbounce
+              ? 0.85
+              : activeSet?.id === 'storm'
+              ? 0.82
+              : 0.74;
+            this.ballVel.z *= friction;
             sound.playBounce(Math.min(1, impactVy / 20));
-            this.world.spawnBurst(this.ballPos, 0xd1d5db, 5, 4);
+            if (activeSet?.id === 'storm') {
+              this.bonusCoins += 20;
+              this.world.spawnBurst(this.ballPos, 0x38bdf8, 10, 7);
+            } else {
+              this.world.spawnBurst(this.ballPos, 0xd1d5db, 5, 4);
+            }
           }
         } else {
-          // Rolling smoothly to a full stop
           this.ballVel.y = 0;
           this.ballVel.z *= Math.pow(0.18, dt);
           this.isSlamming = false;
         }
       }
 
-      // Check interactive props (capped additive boosts — NEVER infinite snowballing!)
+      // ===== INTERACTIVE PROPS (Pads, Barrels, Rings, Moving Taxis, Pinata Drones) =====
       const props = this.world.getNearbyProps(this.ballPos.z);
       const magnetActive = !!this.runActivePowerups.magnet;
       for (const p of props) {
@@ -586,29 +768,61 @@ export class BaseballGame {
           this.save.totalBonuses += 1;
           this.recordMissionProgress('bonuses', 1);
 
+          // Bullseye Slam check!
+          const bullseye = this.isSlamming && (p.type === 'pad' || p.type === 'barrel' || p.type === 'taxi');
+          if (bullseye) {
+            this.slamsLeft = Math.min(3, this.slamsLeft + 1);
+            this.isSlamming = false;
+            this.cb.onCallout('🎯 BULLSEYE SLAM! +1⚡', '#facc15', true);
+          }
+
           if (p.type === 'pad') {
             this.boostHitsThisRun += 1;
-            const decay = Math.pow(0.7, this.boostHitsThisRun - 1);
-            this.ballVel.y = Math.max(11 * decay, Math.min(15, Math.abs(this.ballVel.y) + 7 * decay));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 5.5 * decay);
+            const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
+            const bMult = bullseye ? 1.3 : 1.0;
+            this.ballVel.y = Math.max(11 * decay, Math.min(16, (Math.abs(this.ballVel.y) + 7 * decay) * bMult));
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 5.5 * decay * bMult);
             this.isSlamming = false;
-            this.shakeIntensity = 0.22;
+            this.shakeIntensity = 0.24;
             sound.playBoing();
             this.world.triggerShockwave(this.ballPos, 0x06b6d4);
             this.world.spawnBurst(this.ballPos, 0x06b6d4, 16, 9);
-            this.cb.onCallout('🚀 BOOST PAD!', '#22d3ee', false);
+            if (!bullseye) this.cb.onCallout('🚀 BOOST PAD!', '#22d3ee', false);
           } else if (p.type === 'barrel') {
             p.mesh.visible = false;
             this.boostHitsThisRun += 1;
-            const decay = Math.pow(0.7, this.boostHitsThisRun - 1);
-            this.ballVel.y = Math.max(11 * decay, Math.min(16, Math.abs(this.ballVel.y) + 8 * decay));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 7 * decay);
+            const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
+            const bMult = bullseye ? 1.3 : 1.0;
+            this.ballVel.y = Math.max(11 * decay, Math.min(17, (Math.abs(this.ballVel.y) + 8 * decay) * bMult));
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 7 * decay * bMult);
             this.isSlamming = false;
-            this.shakeIntensity = 0.36;
+            this.shakeIntensity = 0.38;
             sound.playExplosion();
             this.world.triggerShockwave(this.ballPos, 0xf97316);
             this.world.spawnBurst(this.ballPos, 0xf97316, 22, 12);
-            this.cb.onCallout('💥 BOOM BOOST!', '#fb923c', true);
+            if (!bullseye) this.cb.onCallout('💥 BOOM BOOST!', '#fb923c', true);
+          } else if (p.type === 'taxi') {
+            this.boostHitsThisRun += 1;
+            const decay = Math.pow(0.76, this.boostHitsThisRun - 1);
+            const bMult = bullseye ? 1.3 : 1.0;
+            this.ballVel.y = Math.max(12 * decay, 14 * bMult);
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 6.5 * decay * bMult);
+            this.isSlamming = false;
+            this.bonusCoins += 35;
+            this.shakeIntensity = 0.3;
+            sound.playHorn();
+            this.world.triggerShockwave(this.ballPos, 0xfacc15);
+            this.world.spawnBurst(this.ballPos, 0xfacc15, 18, 10);
+            if (!bullseye) this.cb.onCallout('🚕 TAXI BOUNCE! +35🪙', '#facc15', false);
+          } else if (p.type === 'drone') {
+            p.mesh.visible = false;
+            const gemDrop = league.tier >= 3 ? 10 : 5;
+            this.bonusGems += gemDrop;
+            this.chestsWon += 1;
+            sound.playChestOpen();
+            this.world.triggerShockwave(this.ballPos, 0xec4899);
+            this.world.spawnBurst(this.ballPos, 0xec4899, 24, 12);
+            this.cb.onCallout(`🎈 PINATA!! +${gemDrop}💎 +🎁`, '#f472b6', true);
           } else if (p.type === 'ring') {
             p.mesh.visible = false;
             const ringCoins = Math.round(
@@ -641,6 +855,15 @@ export class BaseballGame {
         this.cb.onCallout('👑 NEW RECORD!!', '#facc15', true);
       }
 
+      // Rival challenge beaten!
+      if (this.rival && !this.rival.beaten && dist > this.rival.distance) {
+        this.rival.beaten = true;
+        this.rivalBeatenName = this.rival.name;
+        this.bonusGems += 15;
+        sound.playNewRecord();
+        this.cb.onCallout(`🏆 BEAT ${this.rival.name.toUpperCase()}!! +15💎`, '#4ade80', true);
+      }
+
       const speed = Math.abs(this.ballVel.z);
       const targetCam = new THREE.Vector3(
         this.ballPos.x * 0.45,
@@ -663,7 +886,9 @@ export class BaseballGame {
       this.world.updateEffects(dt, this.elapsed, this.ballPos.z);
 
       const incomeMult = getIncomeMultiplier(this.save.incomeLevel);
-      const liveCoins = Math.round(dist * 0.65 * incomeMult * (this.pitchIsGolden ? 2.5 : 1)) + this.bonusCoins;
+      const liveCoins =
+        Math.round(dist * 0.65 * incomeMult * league.coinMult * (this.pitchIsGolden ? 2.5 : 1)) +
+        this.bonusCoins;
       const biome = this.world.getBiomeInfo(dist);
       this.cb.onFlightUpdate(
         dist,
@@ -671,10 +896,9 @@ export class BaseballGame {
         biome.name,
         liveCoins,
         this.slamsLeft,
-        this.slamsLeft > 0 && this.ballPos.y >= 2.2 && !this.isSlamming
+        this.slamsLeft > 0 && this.ballPos.y >= 2.1 && !this.isSlamming
       );
 
-      // Clean stop condition
       if (this.ballPos.y <= 0.25 && Math.abs(this.ballVel.z) < 1.8 && Math.abs(this.ballVel.y) < 0.6) {
         this.finishRun();
       }
@@ -717,13 +941,11 @@ export class BaseballGame {
     b.rightLeg.hip.rotation.set(-0.22, 0, 0.18);
     b.rightLeg.knee.rotation.set(0.32, 0, 0);
 
-    // Righty batter: hands tucked near back (right, -X) shoulder, arms bent cleanly
     b.leftArm.shoulder.rotation.set(-0.95, 0.25, -0.45);
     b.leftArm.elbow.rotation.set(-1.3, 0, 0);
     b.rightArm.shoulder.rotation.set(-0.85, -0.55, 0.3);
     b.rightArm.elbow.rotation.set(-1.15, 0, 0);
 
-    // Bat held behind righty batter's back shoulder, barrel angled UP and LEFT-BACK (clear of head!)
     if (b.swingPivot && b.batPivot) {
       b.swingPivot.rotation.set(0, 0, 0);
       b.batPivot.position.set(-0.28, 0.02, 0.24);
@@ -748,7 +970,6 @@ export class BaseballGame {
     b.rightArm.shoulder.rotation.set(-0.9, -0.62, 0.35);
     b.rightArm.elbow.rotation.set(-1.15, 0, 0);
 
-    // Cock bat slightly further back behind shoulder ready to whip!
     if (b.swingPivot && b.batPivot) {
       b.swingPivot.rotation.set(0, -0.24 * p, 0);
       b.batPivot.position.set(-0.32, 0.05, 0.22);
@@ -785,7 +1006,6 @@ export class BaseballGame {
     );
     b.rightArm.elbow.rotation.set(THREE.MathUtils.lerp(-1.15, -0.3, levelOut), 0, 0);
 
-    // True righty horizontal swing: from back shoulder (-X) -> across plate (+Z) -> front follow-through (+X)!
     if (b.swingPivot && b.batPivot) {
       b.swingPivot.rotation.set(0.16 * levelOut, THREE.MathUtils.lerp(-0.24, 2.0, ease), 0);
       b.batPivot.position.set(
@@ -814,7 +1034,6 @@ export class BaseballGame {
     p.rightLeg.hip.rotation.set(-0.08, 0, 0.1);
     p.rightLeg.knee.rotation.set(0.14, 0, 0);
 
-    // Both hands tucked together in glove at chest (classic baseball "set" position!)
     p.leftArm.shoulder.rotation.set(-0.75, 0.35, -0.15);
     p.leftArm.elbow.rotation.set(-1.25, 0, 0);
     p.rightArm.shoulder.rotation.set(-0.75, -0.35, 0.15);
@@ -823,29 +1042,22 @@ export class BaseballGame {
 
   private posePitcherWindup(w: number): void {
     const p = this.world.pitcher;
-    // Phase 1 (0..0.6): High leg kick & turn sideways
-    // Phase 2 (0.6..1.0): Cock throwing arm high & back behind head, begin stride!
     const kick = Math.sin(Math.min(1, w / 0.75) * Math.PI * 0.5);
     const cock = Math.max(0, (w - 0.35) / 0.65);
 
     p.hips.position.set(0, 0.88 - cock * 0.1, cock * 0.35);
     p.hips.rotation.set(0, -0.95 * kick, 0);
     p.torsoGroup.rotation.set(-0.18 * cock, -0.45 * cock, 0);
-    // Keep eyes locked on batter!
     p.headGroup.rotation.set(0, 0.95 * kick + 0.35 * cock, 0);
 
-    // High front (left) leg kick!
     p.leftLeg.hip.rotation.set(-1.55 * kick + cock * 0.35, 0, -0.1);
     p.leftLeg.knee.rotation.set(1.55 * kick - cock * 0.5, 0, 0);
-    // Back leg loads on rubber
     p.rightLeg.hip.rotation.set(-0.18 * cock, 0, 0.12);
     p.rightLeg.knee.rotation.set(0.32 * cock, 0, 0);
 
-    // Left glove arm points toward home plate!
     p.leftArm.shoulder.rotation.set(-1.15 * cock - 0.5, 0.5, -0.35 * cock);
     p.leftArm.elbow.rotation.set(-0.5 * (1 - cock), 0, 0);
 
-    // Right throwing arm reaches WAY back & up behind head (super clear baseball throw!)
     p.rightArm.shoulder.rotation.set(
       THREE.MathUtils.lerp(-0.75, -2.75, cock),
       -0.3,
@@ -858,23 +1070,19 @@ export class BaseballGame {
     const p = this.world.pitcher;
     const ease = 1 - Math.pow(1 - t, 3);
 
-    // Lunge forward off mound & whip throwing arm over the top!
     p.hips.position.set(0, 0.78, THREE.MathUtils.lerp(0.35, 1.05, ease));
     p.hips.rotation.set(0.15 * ease, THREE.MathUtils.lerp(-0.95, 0.35, ease), 0);
     p.torsoGroup.rotation.set(THREE.MathUtils.lerp(-0.18, 0.45, ease), THREE.MathUtils.lerp(-0.45, 0.55, ease), 0);
     p.headGroup.rotation.set(-0.25 * ease, THREE.MathUtils.lerp(1.2, -0.65, ease), 0);
 
-    // Front leg plants forward, back leg kicks up behind
     p.leftLeg.hip.rotation.set(THREE.MathUtils.lerp(-1.1, -0.55, ease), 0, -0.1);
     p.leftLeg.knee.rotation.set(THREE.MathUtils.lerp(0.9, 0.55, ease), 0, 0);
     p.rightLeg.hip.rotation.set(THREE.MathUtils.lerp(-0.1, 0.95, ease), 0, 0.15);
     p.rightLeg.knee.rotation.set(0.45, 0, 0);
 
-    // Glove tucks into chest
     p.leftArm.shoulder.rotation.set(-0.7, 0.4, -0.45);
     p.leftArm.elbow.rotation.set(-1.35, 0, 0);
 
-    // Right throwing arm whips from overhead (-2.75) all the way across body (+0.95)!
     p.rightArm.shoulder.rotation.set(
       THREE.MathUtils.lerp(-2.75, 0.85, ease),
       THREE.MathUtils.lerp(-0.3, -0.75, ease),
