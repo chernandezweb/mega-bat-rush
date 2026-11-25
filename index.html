@@ -209,20 +209,16 @@
     <!-- FULL-SCREEN INTERACTIVE MYSTERY CHEST CEREMONY -->
     <div id="chest-overlay" class="hidden">
       <div class="chest-sunburst"></div>
+      <div class="chest-flash" id="chest-flash"></div>
       <div class="chest-confetti-layer" id="chest-confetti-layer"></div>
       <div class="chest-stage">
-        <div class="chest-rarity-tag" id="chest-rarity-tag">MYSTERY CHEST</div>
+        <div class="chest-rarity-tag" id="chest-rarity-tag">✨ MYSTERY CHEST ✨</div>
         <div class="chest-box-wrap" id="chest-box-wrap">
-          <div class="chest-3d" id="chest-3d">
-            <div class="chest-lid" id="chest-lid">
-              <div class="chest-band"></div>
-              <div class="chest-lock">★</div>
-            </div>
-            <div class="chest-base">
-              <div class="chest-band"></div>
-            </div>
+          <div class="chest-visual-wrap" id="chest-3d">
+            <div class="chest-halo" id="chest-halo"></div>
+            <img class="chest-img" id="chest-img" src="./icons/chest-closed.jpg" alt="Mystery Chest" />
           </div>
-          <div class="chest-tap-hint" id="chest-tap-hint">TAP 3 TIMES TO OPEN!</div>
+          <div class="chest-tap-hint" id="chest-tap-hint">TAP 3 TIMES TO CRACK IT OPEN!</div>
         </div>
         <div class="chest-cards-row hidden" id="chest-cards-row"></div>
         <button class="btn-chest-claim hidden" id="btn-chest-claim">AWESOME! CLAIM ALL</button>

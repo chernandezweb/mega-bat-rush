@@ -84,10 +84,12 @@ const resultGems = $('result-gems');
 const btnOpenChest = $<HTMLButtonElement>('btn-open-chest');
 const chestLootEl = $('chest-loot');
 const chestOverlay = $('chest-overlay');
+const chestFlash = $('chest-flash');
 const chestConfettiLayer = $('chest-confetti-layer');
 const chestRarityTag = $('chest-rarity-tag');
 const chestBoxWrap = $('chest-box-wrap');
 const chest3d = $('chest-3d');
+const chestImg = $<HTMLImageElement>('chest-img');
 const chestTapHint = $('chest-tap-hint');
 const chestCardsRow = $('chest-cards-row');
 const btnChestClaim = $<HTMLButtonElement>('btn-chest-claim');
@@ -571,14 +573,16 @@ function spawnChestConfetti(): void {
 function openChestCeremony(): void {
   chestTapsLeft = 3;
   chestOpened = false;
-  chest3d.classList.remove('opened', 'wobble');
+  chestImg.src = './icons/chest-closed.jpg';
+  chest3d.classList.remove('opened', 'wobble', 'charge-1', 'charge-2');
+  chestFlash.classList.remove('boom');
   chestCardsRow.classList.add('hidden');
   chestCardsRow.innerHTML = '';
   btnChestClaim.classList.add('hidden');
   chestConfettiLayer.innerHTML = '';
   chestRarityTag.textContent = '✨ MYSTERY CHEST ✨';
   chestTapHint.classList.remove('hidden');
-  chestTapHint.textContent = 'TAP 3 TIMES TO CRACK IT OPEN!';
+  chestTapHint.textContent = t('tap3Chest');
   chestOverlay.classList.remove('hidden');
 }
 
@@ -592,14 +596,24 @@ chestBoxWrap.addEventListener('click', () => {
 
   if (chestTapsLeft > 0) {
     sound.playUpgrade();
-    chestTapHint.textContent =
-      chestTapsLeft === 2 ? 'CRACKING... 2 MORE TAPS!' : 'ALMOST OPEN!! 1 MORE TAP!!';
+    if (chestTapsLeft === 2) {
+      chest3d.classList.add('charge-1');
+      chestTapHint.textContent = t('tap2Chest');
+    } else {
+      chest3d.classList.add('charge-2');
+      chestTapHint.textContent = t('tap1Chest');
+    }
     return;
   }
 
-  // BOOM! Chest bursts open with 3 reward cards!
+  // BOOM! Flash burst + swap to bursting-open 3D chest + confetti + 3 reward cards!
   chestOpened = true;
+  chest3d.classList.remove('charge-1', 'charge-2', 'wobble');
+  chestImg.src = './icons/chest-open.jpg';
   chest3d.classList.add('opened');
+  chestFlash.classList.remove('boom');
+  void chestFlash.offsetWidth;
+  chestFlash.classList.add('boom');
   chestTapHint.classList.add('hidden');
   spawnChestConfetti();
   sound.playChestOpen();
