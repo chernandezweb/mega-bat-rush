@@ -7,15 +7,23 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private musicDuckBus: GainNode | null = null;
   private reverbNode: ConvolverNode | null = null;
   private reverbSend: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
 
+  private musicTimer: number | null = null;
+  private musicStep = 0;
+  private musicMode: 'IDLE' | 'BOSS' | 'FLYING' = 'IDLE';
+
   public enabled = true;
+  public musicEnabled = true;
   public haptics = true;
 
   private ensureContext(): AudioContext | null {
-    if (!this.enabled) return null;
+    if (!this.enabled && !this.musicEnabled) return null;
     if (!this.ctx) {
       const AudioCtx =
         window.AudioContext ||
@@ -23,7 +31,7 @@ class SoundEngine {
       if (!AudioCtx) return null;
       this.ctx = new AudioCtx();
 
-      // Master bus with soft limiter/compressor so stacked hits stay punchy & clean
+      // Master bus with soft limiter/compressor
       const comp = this.ctx.createDynamicsCompressor();
       comp.threshold.value = -10;
       comp.knee.value = 12;
@@ -35,6 +43,19 @@ class SoundEngine {
       this.masterGain.gain.value = 0.85;
       this.masterGain.connect(comp);
       comp.connect(this.ctx.destination);
+
+      // Dedicated SFX & Music -> MusicDuck buses (per audio-design skill!)
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.gain.value = 1.0;
+      this.sfxBus.connect(this.masterGain);
+
+      this.musicDuckBus = this.ctx.createGain();
+      this.musicDuckBus.gain.value = 1.0;
+      this.musicDuckBus.connect(this.masterGain);
+
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.gain.value = this.musicEnabled ? 0.22 : 0.0;
+      this.musicBus.connect(this.musicDuckBus);
 
       // Synthesized stadium/park impulse response for spatial depth
       const irLen = Math.floor(this.ctx.sampleRate * 0.65);
@@ -52,7 +73,7 @@ class SoundEngine {
       this.reverbSend = this.ctx.createGain();
       this.reverbSend.gain.value = 0.24;
       this.reverbSend.connect(this.reverbNode);
-      this.reverbNode.connect(this.masterGain);
+      this.reverbNode.connect(this.sfxBus);
 
       // Shared 1.2s pink-ish noise buffer
       const nLen = Math.floor(this.ctx.sampleRate * 1.2);
@@ -70,11 +91,95 @@ class SoundEngine {
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+    this.startMusicLoop();
     return this.ctx;
   }
 
+  public setMusicEnabled(on: boolean): void {
+    this.musicEnabled = on;
+    if (this.musicBus && this.ctx) {
+      this.musicBus.gain.setTargetAtTime(on ? 0.22 : 0.0, this.ctx.currentTime, 0.08);
+    }
+  }
+
+  public setMusicMode(mode: 'IDLE' | 'BOSS' | 'FLYING'): void {
+    this.musicMode = mode;
+  }
+
+  public duckMusic(durationSec = 0.45): void {
+    if (!this.ctx || !this.musicDuckBus) return;
+    const now = this.ctx.currentTime;
+    this.musicDuckBus.gain.cancelScheduledValues(now);
+    this.musicDuckBus.gain.setTargetAtTime(0.28, now, 0.015);
+    this.musicDuckBus.gain.setTargetAtTime(1.0, now + durationSec, 0.18);
+  }
+
+  private startMusicLoop(): void {
+    if (this.musicTimer !== null) return;
+    // 124 BPM eighth-note groove (~242ms per step)
+    this.musicTimer = window.setInterval(() => {
+      if (!this.ctx || !this.musicEnabled || !this.musicBus || this.ctx.state !== 'running') return;
+      const now = this.ctx.currentTime;
+      const step = this.musicStep % 16;
+      this.musicStep += 1;
+
+      // Kick drum on 0, 4, 8, 12 (more driving during BOSS & FLYING)
+      if (step % 4 === 0 || (this.musicMode === 'BOSS' && step === 14)) {
+        const k = this.ctx.createOscillator();
+        const kg = this.ctx.createGain();
+        k.type = 'sine';
+        k.frequency.setValueAtTime(120, now);
+        k.frequency.exponentialRampToValueAtTime(42, now + 0.1);
+        kg.gain.setValueAtTime(0.45, now);
+        kg.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        k.connect(kg).connect(this.musicBus);
+        k.start(now);
+        k.stop(now + 0.13);
+      }
+
+      // Crisp off-beat hi-hat during FLYING & BOSS
+      if ((this.musicMode !== 'IDLE' && step % 2 === 1) && this.noiseBuffer) {
+        const h = this.ctx.createBufferSource();
+        h.buffer = this.noiseBuffer;
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 6500;
+        const hg = this.ctx.createGain();
+        hg.gain.setValueAtTime(0.11, now);
+        hg.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        h.connect(hp).connect(hg).connect(this.musicBus);
+        h.start(now, Math.random() * 0.4, 0.05);
+      }
+
+      // Warm upbeat stadium bassline (C - G - Am - F in IDLE/FLYING; tense minor in BOSS)
+      const bassNotes =
+        this.musicMode === 'BOSS'
+          ? [130.81, 0, 130.81, 155.56, 174.61, 0, 155.56, 146.83]
+          : [130.81, 0, 196.0, 0, 220.0, 0, 174.61, 196.0];
+      const note = bassNotes[Math.floor(step / 2) % bassNotes.length];
+      if (note > 0 && step % 2 === 0) {
+        const b = this.ctx.createOscillator();
+        const lp = this.ctx.createBiquadFilter();
+        const bg = this.ctx.createGain();
+        b.type = 'triangle';
+        b.frequency.setValueAtTime(note, now);
+        lp.type = 'lowpass';
+        lp.frequency.value = this.musicMode === 'FLYING' ? 950 : 620;
+        bg.gain.setValueAtTime(0.24, now);
+        bg.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        b.connect(lp).connect(bg).connect(this.musicBus);
+        b.start(now);
+        b.stop(now + 0.22);
+      }
+    }, 240);
+  }
+
   private out(): AudioNode {
-    return this.masterGain!;
+    return this.sfxBus!;
+  }
+
+  private jitter(base: number, pct = 0.05): number {
+    return base * (1 + (Math.random() * 2 - 1) * pct);
   }
 
   private playBellNote(
@@ -176,8 +281,10 @@ class SoundEngine {
   }
 
   public playBatCrack(quality: 'PERFECT' | 'GREAT' | 'GOOD' | 'WEAK'): void {
+    if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.noiseBuffer) return;
+    if (quality === 'PERFECT' || quality === 'GREAT') this.duckMusic(0.55);
     const now = ctx.currentTime;
 
     // Layer 1: Ultra-crisp wooden impact transient (dual formant resonance like real ash bat!)
@@ -254,18 +361,19 @@ class SoundEngine {
   }
 
   public playBounce(intensity = 1): void {
+    if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.noiseBuffer) return;
     const now = ctx.currentTime;
     const clamped = Math.min(1, Math.max(0.15, intensity));
 
-    // Soft turf/concrete ball thud (low-passed transient + sub body)
+    // Soft turf/concrete ball thud with micro pitch & volume variation (kills machine-gun repeat!)
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(125 + 55 * clamped, now);
+    osc.frequency.setValueAtTime(this.jitter(125 + 55 * clamped, 0.06), now);
     osc.frequency.exponentialRampToValueAtTime(42, now + 0.085);
-    g.gain.setValueAtTime(0.32 * clamped, now);
+    g.gain.setValueAtTime(this.jitter(0.32 * clamped, 0.1), now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
     osc.connect(g).connect(this.out());
     osc.start(now);
@@ -338,12 +446,13 @@ class SoundEngine {
   }
 
   public playCoin(): void {
+    if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    // Crisp glossy double-chime bell
-    this.playBellNote(ctx, 1174.66, now, 0.18, 0.16, 0.35);
-    this.playBellNote(ctx, 1567.98, now + 0.055, 0.26, 0.18, 0.45);
+    // Crisp glossy double-chime bell with subtle pitch variation
+    this.playBellNote(ctx, this.jitter(1174.66, 0.04), now, 0.18, 0.16, 0.35);
+    this.playBellNote(ctx, this.jitter(1567.98, 0.04), now + 0.055, 0.26, 0.18, 0.45);
   }
 
   public playUpgrade(): void {

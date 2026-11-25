@@ -74,9 +74,13 @@ export class BaseballGame {
   private hasSwung = false;
   private swingAnimTimer = 0;
 
-  // Hitstop & camera shake
+  // Hitstop, trauma-based camera shake, zoom punch, banking & squash-and-stretch
   private hitstopTimer = 0;
-  private shakeIntensity = 0;
+  private trauma = 0;
+  private shakeTime = 0;
+  private fovPunch = 0;
+  private camBankRoll = 0;
+  private ballScale = new THREE.Vector3(1, 1, 1);
 
   // Ball physics
   private ballPos = new THREE.Vector3();
@@ -108,6 +112,7 @@ export class BaseballGame {
     this.world = new GameWorld(canvas, save);
     this.world.updateRivalFlag(rival);
     sound.enabled = save.soundEnabled;
+    sound.setMusicEnabled(save.musicEnabled);
     sound.haptics = save.hapticsEnabled;
 
     this.resetToIdle(false);
@@ -158,14 +163,20 @@ export class BaseballGame {
     this.pitchProgress = 0;
     this.releaseCaptured = false;
     this.steerTarget = 0;
-    this.shakeIntensity = 0;
+    this.trauma = 0;
+    this.fovPunch = 0;
+    this.camBankRoll = 0;
+    this.ballScale.set(1, 1, 1);
+    this.world.ball.scale.set(1, 1, 1);
 
     // Preview upcoming Boss Pitcher on the mound when Boss Duel is ready!
     if (this.isNextSwingBoss()) {
       const bossIdx = Math.floor(this.save.totalSwings / 6) % BOSSES.length;
       this.currentBoss = BOSSES[bossIdx];
+      sound.setMusicMode('BOSS');
     } else {
       this.currentBoss = null;
+      sound.setMusicMode('IDLE');
     }
     this.world.setPitcherTheme(this.currentBoss);
 
@@ -293,7 +304,9 @@ export class BaseballGame {
       this.save.totalPerfects += 1;
       this.recordMissionProgress('perfects', 1);
       this.hitstopTimer = 0.085;
-      this.shakeIntensity = 0.4;
+      this.addTrauma(0.75);
+      this.fovPunch = -9;
+      this.ballScale.set(0.72, 0.72, 1.5);
       this.cb.onCallout(
         this.save.combo > 1 ? `PERFECT!! 🔥x${this.save.combo}` : 'PERFECT!!',
         '#facc15',
@@ -306,7 +319,9 @@ export class BaseballGame {
       qualityMult = 1.06;
       launchAngleDeg = 31;
       this.hitstopTimer = 0.045;
-      this.shakeIntensity = 0.22;
+      this.addTrauma(0.48);
+      this.fovPunch = -4.5;
+      this.ballScale.set(0.8, 0.8, 1.35);
       this.cb.onCallout('GREAT HIT!', '#38bdf8', true);
       this.world.triggerShockwave(this.ballPos, 0x38bdf8);
       this.world.spawnBurst(this.ballPos, 0x38bdf8, 16, 9);
@@ -316,7 +331,8 @@ export class BaseballGame {
       launchAngleDeg = 26;
       this.save.combo = 0;
       this.hitstopTimer = 0.02;
-      this.shakeIntensity = 0.1;
+      this.addTrauma(0.28);
+      this.ballScale.set(0.88, 0.88, 1.2);
       this.cb.onCallout('GOOD!', '#4ade80', false);
       this.world.spawnBurst(this.ballPos, 0xffffff, 10, 7);
     } else {
@@ -325,7 +341,7 @@ export class BaseballGame {
       launchAngleDeg = 20;
       this.save.combo = 0;
       this.hitstopTimer = 0;
-      this.shakeIntensity = 0.05;
+      this.addTrauma(0.16);
       this.cb.onCallout(this.pitchProgress < 0.88 ? 'EARLY!' : 'LATE!', '#fb923c', false);
       this.world.spawnBurst(this.ballPos, 0xffffff, 8, 5);
     }
@@ -396,6 +412,7 @@ export class BaseballGame {
       bm.emissiveIntensity = 0.9;
     }
 
+    sound.setMusicMode('FLYING');
     this.phase = this.hitstopTimer > 0 ? 'HITSTOP' : 'FLYING';
     this.cb.onPhaseChange(this.phase);
   }
@@ -603,7 +620,7 @@ export class BaseballGame {
       this.hitstopTimer -= dt;
       this.swingAnimTimer += dt * 1.8;
       this.poseBatterSwing(Math.min(1, this.swingAnimTimer / 0.24));
-      this.applyCameraShake();
+      this.applyCameraShake(dt);
       this.world.updateEffects(dt, this.elapsed, 0);
       if (this.hitstopTimer <= 0) {
         this.phase = 'FLYING';
@@ -669,7 +686,8 @@ export class BaseballGame {
             this.wallBrokenName = wall.worldUnlocked;
             this.bonusGems += wall.rewardGems;
             this.hitstopTimer = 0.14;
-            this.shakeIntensity = 0.65;
+            this.addTrauma(0.95);
+            this.fovPunch = -8;
             this.phase = 'HITSTOP';
             this.world.syncWalls(this.save);
             this.world.triggerShockwave(this.ballPos, wall.color);
@@ -686,7 +704,8 @@ export class BaseballGame {
             this.ballPos.z = -wall.distance + 0.8;
             this.ballVel.z = Math.min(7, speedNow * 0.25); // gentle bounce-back
             this.ballVel.y = Math.max(4, this.ballVel.y * 0.4);
-            this.shakeIntensity = 0.4;
+            this.addTrauma(0.6);
+            this.ballScale.set(1.35, 1.35, 0.55);
             this.world.syncWalls(this.save);
             this.world.spawnBurst(this.ballPos, wall.color, 20, 10);
             sound.playExplosion();
@@ -715,6 +734,10 @@ export class BaseballGame {
             ? 0.81
             : 0.74;
           this.ballVel.z *= friction;
+          // Juicy squash-and-stretch on ground bounce!
+          const squash = Math.min(0.45, impactVy / 38);
+          this.ballScale.set(1 + squash, Math.max(0.54, 1 - squash * 1.1), 1 + squash);
+          this.addTrauma(Math.min(0.25, impactVy / 75));
           sound.playBounce(Math.min(1, impactVy / 20));
           if (activeSet?.id === 'storm') {
             this.bonusCoins += 15;
@@ -755,7 +778,8 @@ export class BaseballGame {
             const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
             this.ballVel.y = Math.max(11 * decay, Math.min(16, Math.abs(this.ballVel.y) + 7 * decay));
             this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 5.5 * decay);
-            this.shakeIntensity = 0.24;
+            this.addTrauma(0.4);
+            this.ballScale.set(0.75, 1.45, 0.75);
             sound.playBoing();
             this.world.triggerShockwave(this.ballPos, 0x06b6d4);
             this.world.spawnBurst(this.ballPos, 0x06b6d4, 16, 9);
@@ -766,7 +790,8 @@ export class BaseballGame {
             const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
             this.ballVel.y = Math.max(11 * decay, Math.min(17, Math.abs(this.ballVel.y) + 8 * decay));
             this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 7 * decay);
-            this.shakeIntensity = 0.38;
+            this.addTrauma(0.62);
+            this.ballScale.set(0.72, 0.72, 1.45);
             sound.playExplosion();
             this.world.triggerShockwave(this.ballPos, 0xf97316);
             this.world.spawnBurst(this.ballPos, 0xf97316, 22, 12);
@@ -777,7 +802,8 @@ export class BaseballGame {
             this.ballVel.y = Math.max(12 * decay, 14);
             this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 6.5 * decay);
             this.bonusCoins += 25;
-            this.shakeIntensity = 0.3;
+            this.addTrauma(0.48);
+            this.ballScale.set(1.35, 0.62, 1.35);
             sound.playHorn();
             this.world.triggerShockwave(this.ballPos, 0xfacc15);
             this.world.spawnBurst(this.ballPos, 0xfacc15, 18, 10);
@@ -804,7 +830,9 @@ export class BaseballGame {
         }
       }
 
-      // Ball & shadow
+      // Ball, squash-and-stretch spring recovery & shadow
+      this.ballScale.lerp(new THREE.Vector3(1, 1, 1), Math.min(1, dt * 11));
+      this.world.ball.scale.copy(this.ballScale);
       this.world.ball.position.copy(this.ballPos);
       this.world.ball.rotation.x -= dt * Math.abs(this.ballVel.z) * 0.9;
       this.world.ballShadow.position.set(this.ballPos.x, 0.04, this.ballPos.z);
@@ -846,11 +874,16 @@ export class BaseballGame {
       );
       this.camLook.lerp(targetLook, Math.min(1, dt * 8.5));
 
-      const targetFov = THREE.MathUtils.clamp(56 + speed * 0.22, 56, 70);
-      this.world.camera.fov = THREE.MathUtils.lerp(this.world.camera.fov, targetFov, dt * 4);
+      // Smooth zoom-punch recovery + speed FOV + banking roll into steering!
+      this.fovPunch = THREE.MathUtils.lerp(this.fovPunch, 0, Math.min(1, dt * 7));
+      const targetFov = THREE.MathUtils.clamp(56 + speed * 0.22 + this.fovPunch, 46, 72);
+      this.world.camera.fov = THREE.MathUtils.lerp(this.world.camera.fov, targetFov, dt * 6);
       this.world.camera.updateProjectionMatrix();
 
-      this.applyCameraShake();
+      const targetRoll = -this.steerTarget * 0.065;
+      this.camBankRoll = THREE.MathUtils.lerp(this.camBankRoll, targetRoll, Math.min(1, dt * 7));
+
+      this.applyCameraShake(dt);
       this.world.updateEffects(dt, this.elapsed, this.ballPos.z);
 
       const incomeMult = getIncomeMultiplier(this.save.incomeLevel);
@@ -875,16 +908,27 @@ export class BaseballGame {
     this.world.updateEffects(dt, this.elapsed, this.ballPos.z);
   }
 
-  private applyCameraShake(): void {
-    if (this.shakeIntensity > 0.005) {
-      const sx = (Math.random() - 0.5) * this.shakeIntensity;
-      const sy = (Math.random() - 0.5) * this.shakeIntensity;
+  private addTrauma(amount: number): void {
+    this.trauma = Math.min(1, this.trauma + amount);
+  }
+
+  private applyCameraShake(dt: number): void {
+    // Trauma^2 smooth sinusoidal shake + roll (per game-feel skill — never random per-frame buzz!)
+    this.trauma = Math.max(0, this.trauma - dt * 1.45);
+    const shake = this.trauma * this.trauma;
+    this.shakeTime += dt * 32;
+
+    if (shake > 0.001) {
+      const sx = 0.52 * shake * Math.sin(this.shakeTime * 1.7);
+      const sy = 0.36 * shake * Math.sin(this.shakeTime * 2.3);
       this.world.camera.position.set(this.camPos.x + sx, this.camPos.y + sy, this.camPos.z);
-      this.shakeIntensity *= 0.88;
+      this.world.camera.lookAt(this.camLook);
+      this.world.camera.rotation.z += 0.065 * shake * Math.sin(this.shakeTime * 1.1) + this.camBankRoll;
     } else {
       this.world.camera.position.copy(this.camPos);
+      this.world.camera.lookAt(this.camLook);
+      this.world.camera.rotation.z += this.camBankRoll;
     }
-    this.world.camera.lookAt(this.camLook);
   }
 
   // ===== REALISTIC ARTICULATED BASEBALL ANIMATIONS =====

@@ -113,6 +113,7 @@ export interface GameSave {
   powerupCooldowns: Record<string, number>;
   missions: Mission[];
   soundEnabled: boolean;
+  musicEnabled: boolean;
   hapticsEnabled: boolean;
 }
 
@@ -383,6 +384,7 @@ export function createDefaultSave(): GameSave {
     powerupCooldowns: {},
     missions: createInitialMissions(),
     soundEnabled: true,
+    musicEnabled: true,
     hapticsEnabled: true,
   };
 }

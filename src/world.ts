@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   BossDef,
   GameSave,
@@ -27,6 +28,7 @@ export interface WallVisual {
   def: WallDef;
   group: THREE.Group;
   signMesh: THREE.Mesh;
+  shaderMat: THREE.ShaderMaterial;
 }
 
 interface Particle {
@@ -98,9 +100,10 @@ export class GameWorld {
   private sunLight!: THREE.DirectionalLight;
   private chunks: Map<number, Chunk> = new Map();
   private particles: Particle[] = [];
+  private particlePool: THREE.Mesh[] = [];
   private trailNodes: THREE.Mesh[] = [];
   private trailHistory: THREE.Vector3[] = [];
-  private buildingTextures: THREE.Texture[] = [];
+  private buildingMaterials: THREE.MeshStandardMaterial[] = [];
   private buildingColors: number[] = [0xffffff, 0xdbeafe, 0xfef3c7, 0xfce7f3, 0xd1fae5, 0xe2e8f0];
   private signCache: Map<string, THREE.CanvasTexture> = new Map();
 
@@ -160,12 +163,19 @@ export class GameWorld {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(w, h, false);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // soft since r182
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.05;
+
+    // Studio IBL environment reflections so metallic bats, crowns, helmets, and car windows gleam!
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
 
     this.loadStylizedTextures();
     this.setupLighting();
+    this.initParticlePool();
     this.createSkyDome();
     this.createFieldDetails();
     this.createCharacters(save);
@@ -283,13 +293,28 @@ export class GameWorld {
     this.sharedMat.walkway.color.setHex(0xffffff);
     this.sharedMat.walkway.needsUpdate = true;
 
-    // Seamless cartoon skyscraper glass facade
+    // Seamless cartoon skyscraper glass facade — pre-create 6 shared materials (zero per-chunk allocs!)
     const bldgTex = loader.load('./textures/building.jpg');
     bldgTex.wrapS = THREE.RepeatWrapping;
     bldgTex.wrapT = THREE.RepeatWrapping;
     bldgTex.repeat.set(1, 2);
     bldgTex.colorSpace = THREE.SRGBColorSpace;
-    this.buildingTextures = [bldgTex];
+    this.buildingMaterials = this.buildingColors.map(
+      (tint) => new THREE.MeshStandardMaterial({ map: bldgTex, color: tint, roughness: 0.42, metalness: 0.12 })
+    );
+  }
+
+  private initParticlePool(): void {
+    // Pre-allocate 72 reusable particle meshes to eliminate GC hitches on mobile!
+    for (let i = 0; i < 72; i++) {
+      const m = new THREE.Mesh(
+        this.sharedGeo.box,
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      m.visible = false;
+      this.scene.add(m);
+      this.particlePool.push(m);
+    }
   }
 
   private createBaseballPlayer(color: number, isPitcher: boolean, emissive = 0x000000): BaseballPlayerRig {
@@ -921,13 +946,82 @@ export class GameWorld {
     }
   }
 
+  private createWallShaderMaterial(baseHex: number, edgeHex: number): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uColor: { value: new THREE.Color(baseHex) },
+        uEdgeColor: { value: new THREE.Color(edgeHex) },
+        uDamage: { value: 0.0 },
+        uTime: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+        varying vec3 vViewDir;
+        void main() {
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          vViewDir = normalize(cameraPosition - worldPos.xyz);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform vec3 uColor;
+        uniform vec3 uEdgeColor;
+        uniform float uDamage;
+        uniform float uTime;
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+        varying vec3 vViewDir;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+
+        void main() {
+          // Layered procedural crack/dissolve noise
+          float n = noise(vUv * 8.0) * 0.65 + noise(vUv * 18.0 + 3.1) * 0.35;
+          float edge = 0.09;
+          float amount = clamp(uDamage * 0.82, 0.0, 0.92);
+          float cut = amount * (1.0 + edge) - edge;
+          if (n <= cut) discard;
+
+          float edgeBand = 1.0 - smoothstep(cut, cut + edge, n);
+
+          // Fresnel rim glow + subtle animated energy scanlines
+          vec3 N = normalize(vWorldNormal);
+          vec3 V = normalize(vViewDir);
+          float fresnel = pow(1.0 - clamp(abs(dot(N, V)), 0.0, 1.0), 2.4);
+          float scan = 0.9 + 0.1 * sin(vUv.y * 42.0 - uTime * 4.5);
+
+          vec3 col = uColor * scan + uEdgeColor * (fresnel * 0.65);
+          col = mix(col, uEdgeColor * 1.45, edgeBand);
+          gl_FragColor = vec4(col, 0.88);
+        }
+      `,
+    });
+  }
+
   private createWalls(save: GameSave): void {
     for (const def of WALLS) {
       const group = new THREE.Group();
       group.position.set(0, 0, -def.distance);
 
-      // Left & right thick pillars
-      const pillarMat = new THREE.MeshStandardMaterial({ color: def.accent, roughness: 0.35, metalness: 0.3 });
+      const pillarMat = new THREE.MeshStandardMaterial({ color: def.accent, roughness: 0.3, metalness: 0.45 });
       for (const side of [-1, 1]) {
         const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, 10, 0.9), pillarMat);
         pillar.position.set(side * 3.5, 5, 0);
@@ -935,21 +1029,15 @@ export class GameWorld {
         group.add(pillar);
       }
 
-      // Breakable barrier panel across the walkway
-      const panelMat = new THREE.MeshStandardMaterial({
-        color: def.color,
-        emissive: def.color,
-        emissiveIntensity: 0.22,
-        transparent: true,
-        opacity: 0.86,
-        roughness: 0.25,
-      });
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 8.8, 0.55), panelMat);
+      // Custom GLSL Dissolve + Fresnel Rim Barrier!
+      const shaderMat = this.createWallShaderMaterial(def.color, def.accent);
+      const dmgRatio = Math.min(1, (save.wallDamage[def.id] || 0) / def.maxHp);
+      shaderMat.uniforms.uDamage.value = dmgRatio;
+
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 8.8, 0.55), shaderMat);
       panel.position.set(0, 4.4, 0);
-      panel.castShadow = true;
       group.add(panel);
 
-      // HP & Name banner on top
       const remHp = Math.max(0, def.maxHp - (save.wallDamage[def.id] || 0));
       const signMesh = new THREE.Mesh(
         new THREE.BoxGeometry(7.2, 1.45, 0.3),
@@ -962,7 +1050,7 @@ export class GameWorld {
 
       group.visible = !save.brokenWalls.includes(def.id);
       this.scene.add(group);
-      this.wallVisuals.set(def.id, { def, group, signMesh });
+      this.wallVisuals.set(def.id, { def, group, signMesh, shaderMat });
     }
   }
 
@@ -971,7 +1059,9 @@ export class GameWorld {
       const broken = save.brokenWalls.includes(id);
       wv.group.visible = !broken;
       if (!broken) {
-        const remHp = Math.max(1, wv.def.maxHp - (save.wallDamage[id] || 0));
+        const dmg = save.wallDamage[id] || 0;
+        wv.shaderMat.uniforms.uDamage.value = Math.min(1, dmg / wv.def.maxHp);
+        const remHp = Math.max(1, wv.def.maxHp - dmg);
         const mat = wv.signMesh.material as THREE.MeshStandardMaterial;
         mat.map = this.getSignTexture(`${wv.def.name} ${remHp}HP`, '#dc2626', '#fef08a');
         mat.needsUpdate = true;
@@ -1141,9 +1231,7 @@ export class GameWorld {
         const w = 6 + rand(b * 11 + side) * 6;
         const h = 14 + rand(b * 17 + side) * 28;
         const d = 8 + rand(b * 23 + side) * 5;
-        const tex = this.buildingTextures[0];
-        const tint = this.buildingColors[Math.floor(rand(b * 31 + side) * this.buildingColors.length)];
-        const mat = new THREE.MeshStandardMaterial({ map: tex, color: tint, roughness: 0.55 });
+        const mat = this.buildingMaterials[Math.floor(rand(b * 31 + side) * this.buildingMaterials.length)];
         const bldg = new THREE.Mesh(this.sharedGeo.box, mat);
         bldg.scale.set(w, h, d);
         bldg.position.set(side * (12.5 + w * 0.5 + rand(b * 3 + side) * 4), h * 0.5 - 0.1, bz);
@@ -1414,13 +1502,14 @@ export class GameWorld {
   }
 
   public spawnBurst(pos: THREE.Vector3, color: number, count = 16, speed = 9): void {
-    const mat = new THREE.MeshBasicMaterial({ color });
     for (let i = 0; i < count; i++) {
-      const m = new THREE.Mesh(this.sharedGeo.box, mat);
+      const m = this.particlePool.pop();
+      if (!m) break;
       const s = 0.14 + Math.random() * 0.2;
+      (m.material as THREE.MeshBasicMaterial).color.setHex(color);
       m.scale.setScalar(s);
       m.position.copy(pos);
-      this.scene.add(m);
+      m.visible = true;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI;
       const spd = speed * (0.4 + Math.random() * 0.8);
@@ -1508,11 +1597,20 @@ export class GameWorld {
       if (mat.opacity <= 0) this.shockwaveRing.visible = false;
     }
 
+    // Animate Breakthrough Wall GLSL shaders
+    for (const wv of this.wallVisuals.values()) {
+      if (wv.group.visible) {
+        wv.shaderMat.uniforms.uTime.value = time;
+      }
+    }
+
+    // Pooled particles (zero GC allocations!)
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life += dt;
       if (p.life >= p.maxLife) {
-        this.scene.remove(p.mesh);
+        p.mesh.visible = false;
+        this.particlePool.push(p.mesh);
         this.particles.splice(i, 1);
         continue;
       }

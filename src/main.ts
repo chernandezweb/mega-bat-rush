@@ -110,6 +110,7 @@ const questListEl = $('quest-list');
 const settingsStatsEl = $('settings-stats');
 const inputPlayerName = $<HTMLInputElement>('input-player-name');
 const toggleSound = $<HTMLInputElement>('toggle-sound');
+const toggleMusic = $<HTMLInputElement>('toggle-music');
 const toggleHaptics = $<HTMLInputElement>('toggle-haptics');
 
 let activeShopTab: 'bats' | 'helmets' | 'trails' | 'skins' = 'bats';
@@ -892,6 +893,7 @@ $('btn-quests').addEventListener('click', () => {
 $('btn-settings').addEventListener('click', () => {
   inputPlayerName.value = save.playerName || 'Slugger';
   toggleSound.checked = save.soundEnabled;
+  toggleMusic.checked = save.musicEnabled;
   toggleHaptics.checked = save.hapticsEnabled;
   settingsStatsEl.innerHTML = `
     <div><strong>Best Distance:</strong> ${save.bestDistance}m</div>
@@ -911,6 +913,12 @@ inputPlayerName.addEventListener('change', () => {
 toggleSound.addEventListener('change', () => {
   save.soundEnabled = toggleSound.checked;
   sound.enabled = save.soundEnabled;
+  saveGame(save);
+});
+
+toggleMusic.addEventListener('change', () => {
+  save.musicEnabled = toggleMusic.checked;
+  sound.setMusicEnabled(save.musicEnabled);
   saveGame(save);
 });
 
