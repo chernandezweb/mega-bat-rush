@@ -82,6 +82,14 @@ const resultGemLine = $('result-gem-line');
 const resultGems = $('result-gems');
 const btnOpenChest = $<HTMLButtonElement>('btn-open-chest');
 const chestLootEl = $('chest-loot');
+const chestOverlay = $('chest-overlay');
+const chestConfettiLayer = $('chest-confetti-layer');
+const chestRarityTag = $('chest-rarity-tag');
+const chestBoxWrap = $('chest-box-wrap');
+const chest3d = $('chest-3d');
+const chestTapHint = $('chest-tap-hint');
+const chestCardsRow = $('chest-cards-row');
+const btnChestClaim = $<HTMLButtonElement>('btn-chest-claim');
 const multReelWrap = $('mult-reel-wrap');
 const multReelNeedle = $('mult-reel-needle');
 const btnBonus2x = $<HTMLButtonElement>('btn-bonus-2x');
@@ -481,40 +489,132 @@ btnBonus2x.addEventListener('click', () => {
   updateHUD();
 });
 
-btnOpenChest.addEventListener('click', () => {
-  if (chestsRemaining <= 0) return;
-  chestsRemaining -= 1;
+// ===== INTERACTIVE 3-TAP MYSTERY CHEST CEREMONY =====
+let chestTapsLeft = 3;
+let chestOpened = false;
+
+function spawnChestConfetti(): void {
+  chestConfettiLayer.innerHTML = '';
+  const colors = ['#facc15', '#38bdf8', '#f472b6', '#4ade80', '#fb923c', '#ffffff'];
+  for (let i = 0; i < 34; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 90 + Math.random() * 190;
+    piece.style.background = colors[i % colors.length];
+    piece.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+    piece.style.setProperty('--ty', `${Math.sin(angle) * dist - 40}px`);
+    piece.style.setProperty('--rot', `${Math.round(Math.random() * 720 - 360)}deg`);
+    chestConfettiLayer.appendChild(piece);
+  }
+}
+
+function openChestCeremony(): void {
+  chestTapsLeft = 3;
+  chestOpened = false;
+  chest3d.classList.remove('opened', 'wobble');
+  chestCardsRow.classList.add('hidden');
+  chestCardsRow.innerHTML = '';
+  btnChestClaim.classList.add('hidden');
+  chestConfettiLayer.innerHTML = '';
+  chestRarityTag.textContent = '✨ MYSTERY CHEST ✨';
+  chestTapHint.classList.remove('hidden');
+  chestTapHint.textContent = 'TAP 3 TIMES TO CRACK IT OPEN!';
+  chestOverlay.classList.remove('hidden');
+}
+
+chestBoxWrap.addEventListener('click', () => {
+  if (chestOpened) return;
+  chestTapsLeft -= 1;
+
+  chest3d.classList.remove('wobble');
+  void chest3d.offsetWidth;
+  chest3d.classList.add('wobble');
+
+  if (chestTapsLeft > 0) {
+    sound.playUpgrade();
+    chestTapHint.textContent =
+      chestTapsLeft === 2 ? 'CRACKING... 2 MORE TAPS!' : 'ALMOST OPEN!! 1 MORE TAP!!';
+    return;
+  }
+
+  // BOOM! Chest bursts open with 3 reward cards!
+  chestOpened = true;
+  chest3d.classList.add('opened');
+  chestTapHint.classList.add('hidden');
+  spawnChestConfetti();
   sound.playChestOpen();
 
   const league = getCurrentLeague(save);
   const gemMult = league.tier >= 3 ? 2 : 1;
-  const bonusCoins = Math.round((75 + save.batLevel * 22) * league.coinMult);
-  const bonusGems = (6 + Math.floor(Math.random() * 8)) * gemMult;
+  const bonusCoins = Math.round((110 + save.batLevel * 28) * league.coinMult);
+  const bonusGems = (8 + Math.floor(Math.random() * 9)) * gemMult;
   save.coins += bonusCoins;
   save.gems += bonusGems;
 
-  // 30% chance to unlock a free random unowned Shop item!
+  // Card 3: 45% chance for a FREE unowned Shop Gear item, otherwise a FREE activated Powerup!
   const unowned = SHOP_ITEMS.filter((i) => !save.ownedItems.includes(i.id));
-  let itemText = '';
-  if (unowned.length > 0 && Math.random() < 0.3) {
-    const gift = unowned[Math.floor(Math.random() * Math.min(4, unowned.length))];
+  let card3Emoji = '🔥';
+  let card3Val = 'Fireball';
+  let card3Label = 'FREE POWERUP';
+  let isLegendary = false;
+
+  if (unowned.length > 0 && Math.random() < 0.45) {
+    const gift = unowned[Math.floor(Math.random() * Math.min(5, unowned.length))];
     save.ownedItems.push(gift.id);
-    itemText = ` + FREE ${gift.emoji} ${gift.name}!`;
+    card3Emoji = gift.emoji;
+    card3Val = gift.name;
+    card3Label = 'NEW GEAR!';
+    isLegendary = true;
+  } else {
+    const freePu = POWERUPS[Math.floor(Math.random() * POWERUPS.length)];
+    save.activePowerups[freePu.id] = true;
+    card3Emoji = freePu.emoji;
+    card3Val = freePu.name;
+    card3Label = 'ACTIVE BOOST';
   }
+
+  chestRarityTag.textContent = isLegendary ? '🌟 LEGENDARY DROP!! 🌟' : '🎉 EPIC LOOT!! 🎉';
+
+  chestCardsRow.innerHTML = `
+    <div class="loot-card" style="animation-delay:0.05s">
+      <div class="loot-emoji">🪙</div>
+      <div class="loot-val">+${formatNumber(bonusCoins)}</div>
+      <div class="loot-label">Coins</div>
+    </div>
+    <div class="loot-card" style="animation-delay:0.18s">
+      <div class="loot-emoji">💎</div>
+      <div class="loot-val">+${bonusGems}</div>
+      <div class="loot-label">Gems</div>
+    </div>
+    <div class="loot-card epic" style="animation-delay:0.32s">
+      <div class="loot-emoji">${card3Emoji}</div>
+      <div class="loot-val">${card3Val}</div>
+      <div class="loot-label">${card3Label}</div>
+    </div>
+  `;
+  chestCardsRow.classList.remove('hidden');
+  btnChestClaim.classList.remove('hidden');
 
   saveGame(save);
   bumpPill(coinPill);
   bumpPill(gemPill);
   updateHUD();
+});
 
-  chestLootEl.classList.remove('hidden');
-  chestLootEl.textContent = `🎁 Chest: +${formatNumber(bonusCoins)} 🪙 & +${bonusGems} 💎${itemText}`;
-
+btnChestClaim.addEventListener('click', () => {
+  chestOverlay.classList.add('hidden');
   if (chestsRemaining > 0) {
     btnOpenChest.textContent = `🎁 OPEN NEXT CHEST (${chestsRemaining})`;
   } else {
     btnOpenChest.classList.add('hidden');
   }
+});
+
+btnOpenChest.addEventListener('click', () => {
+  if (chestsRemaining <= 0) return;
+  chestsRemaining -= 1;
+  openChestCeremony();
 });
 
 btnShare.addEventListener('click', async () => {

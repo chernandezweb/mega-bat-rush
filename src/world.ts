@@ -133,8 +133,14 @@ export class GameWorld {
     gatePost: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 }),
     shoe: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 }),
     glove: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8 }),
-    taxiYellow: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 }),
-    taxiGlass: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, metalness: 0.4 }),
+    taxiYellow: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.25, metalness: 0.15 }),
+    carRed: new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.22, metalness: 0.25 }),
+    carBlue: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.22, metalness: 0.25 }),
+    taxiGlass: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.12, metalness: 0.55 }),
+    tireBlack: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.85 }),
+    rimSilver: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.25, metalness: 0.7 }),
+    headlight: new THREE.MeshStandardMaterial({ color: 0xfef9c3, emissive: 0xfef08a, emissiveIntensity: 1.0 }),
+    taillight: new THREE.MeshStandardMaterial({ color: 0xfca5a5, emissive: 0xef4444, emissiveIntensity: 0.9 }),
     dronePink: new THREE.MeshStandardMaterial({ color: 0xec4899, emissive: 0xdb2777, emissiveIntensity: 0.45, roughness: 0.25 }),
   };
 
@@ -1234,32 +1240,27 @@ export class GameWorld {
         });
       }
 
-      // Moving Yellow Taxi crossing the street every 3rd chunk (starting past 80m)!
+      // Detailed Moving Car (NYC Taxi / Sports Coupe / Police Cruiser) crossing every 3rd chunk!
       if (index >= 2 && index % 3 === 1) {
         const tz = zStart - 20;
-        const taxiGroup = new THREE.Group();
-        const body = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiYellow);
-        body.scale.set(2.2, 0.72, 1.2);
-        body.position.y = 0.55;
-        body.castShadow = true;
-        const cabin = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiGlass);
-        cabin.scale.set(1.2, 0.55, 1.05);
-        cabin.position.y = 1.1;
-        taxiGroup.add(body, cabin);
+        const variant = index % 9 === 1 ? 'taxi' : index % 9 === 4 ? 'sports' : 'police';
+        const carGroup = this.buildDetailedCar(variant);
         const startX = (rand(71) - 0.5) * 4;
-        taxiGroup.position.set(startX, 0, tz);
-        group.add(taxiGroup);
+        const dir = rand(79) > 0.5 ? 1 : -1;
+        carGroup.position.set(startX, 0, tz);
+        carGroup.rotation.y = dir > 0 ? 0 : Math.PI;
+        group.add(carGroup);
         props.push({
           id: propIdCounter++,
           type: 'taxi',
-          mesh: taxiGroup,
+          mesh: carGroup,
           x: startX,
-          y: 0.85,
+          y: 0.9,
           z: tz,
-          radius: 2.05,
+          radius: 2.15,
           triggered: false,
           moveSpeed: 3.2 + rand(73) * 2.0,
-          moveDir: rand(79) > 0.5 ? 1 : -1,
+          moveDir: dir,
         });
       }
 
@@ -1290,6 +1291,112 @@ export class GameWorld {
     }
 
     return { index, zStart, group, props };
+  }
+
+  private buildDetailedCar(variant: 'taxi' | 'sports' | 'police'): THREE.Group {
+    // Car faces +X by default (front at +X, rear at -X)
+    const g = new THREE.Group();
+    const bodyMat =
+      variant === 'taxi'
+        ? this.sharedMat.taxiYellow
+        : variant === 'sports'
+        ? this.sharedMat.carRed
+        : this.sharedMat.carBlue;
+
+    // Lower body chassis
+    const chassis = new THREE.Mesh(this.sharedGeo.box, bodyMat);
+    chassis.scale.set(2.55, 0.56, 1.32);
+    chassis.position.set(0, 0.54, 0);
+    chassis.castShadow = true;
+    g.add(chassis);
+
+    // Front hood slope accent
+    const hood = new THREE.Mesh(this.sharedGeo.box, bodyMat);
+    hood.scale.set(0.75, 0.24, 1.22);
+    hood.position.set(0.86, 0.86, 0);
+    hood.rotation.z = -0.18;
+    g.add(hood);
+
+    // Roof cabin shell
+    const roof = new THREE.Mesh(this.sharedGeo.box, bodyMat);
+    roof.scale.set(1.25, 0.48, 1.16);
+    roof.position.set(-0.18, 1.04, 0);
+    roof.castShadow = true;
+    g.add(roof);
+
+    // Wrap-around glossy windows (front/back + sides)
+    const winFB = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiGlass);
+    winFB.scale.set(1.3, 0.34, 1.02);
+    winFB.position.set(-0.18, 1.04, 0);
+    g.add(winFB);
+
+    const winSide = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taxiGlass);
+    winSide.scale.set(1.06, 0.34, 1.2);
+    winSide.position.set(-0.18, 1.04, 0);
+    g.add(winSide);
+
+    // Front & rear chrome bumpers
+    for (const end of [-1, 1]) {
+      const bumper = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.rimSilver);
+      bumper.scale.set(0.14, 0.18, 1.38);
+      bumper.position.set(end * 1.3, 0.36, 0);
+      g.add(bumper);
+    }
+
+    // Glowing headlights (+X) & taillights (-X)
+    for (const side of [-1, 1]) {
+      const hl = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.headlight);
+      hl.scale.set(0.1, 0.18, 0.26);
+      hl.position.set(1.28, 0.58, side * 0.44);
+      g.add(hl);
+
+      const tl = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taillight);
+      tl.scale.set(0.1, 0.16, 0.28);
+      tl.position.set(-1.28, 0.58, side * 0.44);
+      g.add(tl);
+    }
+
+    // 4 Wheels with rubber tires + silver rims!
+    for (const wx of [-0.78, 0.78]) {
+      for (const wz of [-0.66, 0.66]) {
+        const tire = new THREE.Mesh(this.sharedGeo.cyl, this.sharedMat.tireBlack);
+        tire.scale.set(0.32, 0.22, 0.32);
+        tire.rotation.x = Math.PI / 2;
+        tire.position.set(wx, 0.32, wz);
+        tire.castShadow = true;
+        g.add(tire);
+
+        const rim = new THREE.Mesh(this.sharedGeo.cyl, this.sharedMat.rimSilver);
+        rim.scale.set(0.18, 0.24, 0.18);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.set(wx, 0.32, wz);
+        g.add(rim);
+      }
+    }
+
+    // Variant roof details!
+    if (variant === 'taxi') {
+      const sign = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.headlight);
+      sign.scale.set(0.34, 0.18, 0.56);
+      sign.position.set(-0.12, 1.36, 0);
+      g.add(sign);
+    } else if (variant === 'police') {
+      const barRed = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.taillight);
+      barRed.scale.set(0.22, 0.16, 0.32);
+      barRed.position.set(-0.15, 1.35, -0.2);
+      const barBlue = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.padBase);
+      barBlue.scale.set(0.22, 0.16, 0.32);
+      barBlue.position.set(-0.15, 1.35, 0.2);
+      g.add(barRed, barBlue);
+    } else {
+      // Sports car rear spoiler!
+      const wing = new THREE.Mesh(this.sharedGeo.box, this.sharedMat.tireBlack);
+      wing.scale.set(0.24, 0.08, 1.28);
+      wing.position.set(-1.12, 0.98, 0);
+      g.add(wing);
+    }
+
+    return g;
   }
 
   public getNearbyProps(z: number): InteractiveProp[] {
@@ -1377,8 +1484,8 @@ export class GameWorld {
           p.mesh.rotation.y = time * 2.2;
         } else if (p.type === 'taxi' && p.moveSpeed && p.moveDir) {
           p.x += p.moveSpeed * p.moveDir * dt;
-          if (p.x > 3.6) p.moveDir = -1;
-          if (p.x < -3.6) p.moveDir = 1;
+          if (p.x > 3.6) { p.moveDir = -1; p.mesh.rotation.y = Math.PI; }
+          if (p.x < -3.6) { p.moveDir = 1; p.mesh.rotation.y = 0; }
           p.mesh.position.x = p.x;
         } else if (p.type === 'drone' && p.baseY !== undefined) {
           p.y = p.baseY + Math.sin(time * 3.0 + p.id) * 0.75;
