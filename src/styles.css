@@ -1925,3 +1925,55 @@ html, body {
   border: 3px solid #facc15;
   box-shadow: 0 0 0 2px #020617, 0 10px 26px rgba(0, 0, 0, 0.55);
 }
+
+/* ===== PINNED MODAL HEADER (ALWAYS-VISIBLE X) & SLEEK INNER SCROLL ===== */
+.modal-panel {
+  overflow: hidden !important;
+  max-height: 82dvh;
+  padding: 16px;
+}
+
+.modal-header,
+.shop-tabs,
+.set-bonus-bar,
+.modal-desc {
+  flex-shrink: 0;
+}
+
+.shop-grid,
+.powerup-list,
+.quest-list,
+.settings-list,
+#league-content {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.45) transparent;
+}
+
+.shop-grid::-webkit-scrollbar,
+.powerup-list::-webkit-scrollbar,
+.quest-list::-webkit-scrollbar,
+.settings-list::-webkit-scrollbar,
+#league-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.shop-grid::-webkit-scrollbar-track,
+.powerup-list::-webkit-scrollbar-track,
+.quest-list::-webkit-scrollbar-track,
+.settings-list::-webkit-scrollbar-track,
+#league-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.shop-grid::-webkit-scrollbar-thumb,
+.powerup-list::-webkit-scrollbar-thumb,
+.quest-list::-webkit-scrollbar-thumb,
+.settings-list::-webkit-scrollbar-thumb,
+#league-content::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.45);
+  border-radius: 999px;
+}
