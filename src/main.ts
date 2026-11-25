@@ -24,10 +24,12 @@ import {
 } from './state';
 import { BaseballGame, GamePhase, RunResult } from './game';
 import { sound } from './audio';
+import { Lang, setLang, t } from './i18n';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const save: GameSave = loadSave();
+setLang(save.lang || 'en');
 const rival = parseRivalFromURL();
 
 // DOM elements
@@ -109,9 +111,49 @@ const leagueContentEl = $('league-content');
 const questListEl = $('quest-list');
 const settingsStatsEl = $('settings-stats');
 const inputPlayerName = $<HTMLInputElement>('input-player-name');
+const selectLang = $<HTMLSelectElement>('select-lang');
 const toggleSound = $<HTMLInputElement>('toggle-sound');
 const toggleMusic = $<HTMLInputElement>('toggle-music');
 const toggleHaptics = $<HTMLInputElement>('toggle-haptics');
+
+function applyStaticLabels(): void {
+  const qs = (sel: string) => document.querySelector(sel) as HTMLElement | null;
+  const set = (sel: string, val: string) => { const el = qs(sel); if (el) el.textContent = val; };
+
+  set('.tap-start-text', t('tapStart'));
+  set('.tap-sub-text', t('tapSub'));
+  set('.timing-label', t('tapSwing'));
+  set('.powerup-btn .side-tag', t('boost'));
+  set('.league-btn .side-tag', t('league'));
+  set('#upg-bat .card-title', t('bat'));
+  set('#upg-muscle .card-title', t('muscle'));
+  set('#upg-income .card-title', t('income'));
+  set('#result-new-record', t('newRecord'));
+  set('#btn-share', t('challenge'));
+  set('#btn-continue', t('nextAtBat'));
+  set('#btn-chest-claim', t('awesomeClaim'));
+  set('#modal-powerups h2', t('powerupsTitle'));
+  set('#modal-shop h2', t('shopTitle'));
+  set('#modal-league h2', t('leagueTitle'));
+  set('#modal-quests h2', t('missionsTitle'));
+  set('#modal-quests .modal-desc', t('missionsDesc'));
+  set('#modal-settings h2', t('settingsTitle'));
+  set('.shop-tab[data-tab="bats"]', t('tabBats'));
+  set('.shop-tab[data-tab="helmets"]', t('tabHelmets'));
+  set('.shop-tab[data-tab="trails"]', t('tabTrails'));
+  set('.shop-tab[data-tab="skins"]', t('tabBatter'));
+  set('#btn-reset-save', t('resetProgress'));
+
+  const statLabels = document.querySelectorAll('.result-stat .r-label');
+  if (statLabels[0]) statLabels[0].textContent = t('maxHeight');
+  if (statLabels[1]) statLabels[1].textContent = t('bounces');
+  if (statLabels[2]) statLabels[2].textContent = t('bonusHits');
+
+  const recordSpan = qs('#record-badge > span:nth-child(2)');
+  if (recordSpan) {
+    recordSpan.innerHTML = `${t('best')} <strong id="best-distance">${save.bestDistance}m</strong>`;
+  }
+}
 
 let activeShopTab: 'bats' | 'helmets' | 'trails' | 'skins' = 'bats';
 let lastRunResult: RunResult | null = null;
@@ -178,7 +220,8 @@ function renderDots(containerId: string, level: number): void {
 function updateHUD(): void {
   coinCount.textContent = formatNumber(save.coins);
   gemCount.textContent = formatNumber(save.gems);
-  bestDistanceEl.textContent = `${save.bestDistance}m`;
+  const bestEl = document.getElementById('best-distance');
+  if (bestEl) bestEl.textContent = `${save.bestDistance}m`;
 
   if (save.combo >= 2) {
     comboPill.classList.remove('hidden');
@@ -196,10 +239,10 @@ function updateHUD(): void {
 
   const swingsToBoss = game ? game.getSwingsUntilBoss() : 4;
   if (swingsToBoss === 0) {
-    bossChip.textContent = '🔥 BOSS DUEL READY!';
+    bossChip.textContent = t('bossReady');
     bossChip.classList.add('ready');
   } else {
-    bossChip.textContent = `⚔️ Boss in ${swingsToBoss}`;
+    bossChip.textContent = `${t('bossIn')} ${swingsToBoss}`;
     bossChip.classList.remove('ready');
   }
 
@@ -303,12 +346,12 @@ const game = new BaseballGame(canvas, save, rival, {
     resultNewRecord.classList.toggle('hidden', !res.isNewRecord);
     resultQuality.textContent =
       res.quality === 'PERFECT'
-        ? '🔥 PERFECT CRUSH!'
+        ? t('perfectCrush')
         : res.quality === 'GREAT'
-        ? '⚡ GREAT HIT!'
+        ? t('greatHit')
         : res.quality === 'GOOD'
-        ? '👍 SOLID HIT!'
-        : '⚾ BASE HIT!';
+        ? t('solidHit')
+        : t('baseHit');
     resultDistNum.textContent = `${res.distance}m`;
     resultHeight.textContent = `${res.maxHeight}m`;
     resultBounces.textContent = String(res.bounces);
@@ -348,7 +391,7 @@ const game = new BaseballGame(canvas, save, rival, {
     // 3x Multiplier Reel
     multReelWrap.classList.remove('hidden');
     btnBonus2x.disabled = false;
-    btnBonus2x.innerHTML = '<span>🎯 STOP REEL FOR UP TO 3×!</span>';
+    btnBonus2x.innerHTML = `<span>${t('stopReel')}</span>`;
     startMultiplierReel();
 
     bumpPill(coinPill);
@@ -892,6 +935,7 @@ $('btn-quests').addEventListener('click', () => {
 // ===== SETTINGS MODAL =====
 $('btn-settings').addEventListener('click', () => {
   inputPlayerName.value = save.playerName || 'Slugger';
+  selectLang.value = save.lang || 'en';
   toggleSound.checked = save.soundEnabled;
   toggleMusic.checked = save.musicEnabled;
   toggleHaptics.checked = save.hapticsEnabled;
@@ -908,6 +952,14 @@ $('btn-settings').addEventListener('click', () => {
 inputPlayerName.addEventListener('change', () => {
   save.playerName = inputPlayerName.value.trim().slice(0, 14) || 'Slugger';
   saveGame(save);
+});
+
+selectLang.addEventListener('change', () => {
+  save.lang = (selectLang.value === 'es' ? 'es' : 'en') as Lang;
+  setLang(save.lang);
+  saveGame(save);
+  applyStaticLabels();
+  updateHUD();
 });
 
 toggleSound.addEventListener('change', () => {
@@ -941,5 +993,6 @@ $('btn-reset-save').addEventListener('click', () => {
 });
 
 // Initial render
+applyStaticLabels();
 updateHUD();
 handlePhaseChange('IDLE');

@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no" class="notranslate">
 <head>
   <meta charset="UTF-8" />
+  <meta name="google" content="notranslate" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#3b82f6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -295,7 +296,14 @@
             <input type="checkbox" id="toggle-music" checked />
           </label>
           <label class="setting-row">
-            <span>📳 Haptic Vibration</span>
+            <span id="lbl-lang">🌐 Language</span>
+            <select id="select-lang" class="name-input">
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span id="lbl-haptics">📳 Haptic Vibration</span>
             <input type="checkbox" id="toggle-haptics" checked />
           </label>
           <div class="settings-stats" id="settings-stats"></div>

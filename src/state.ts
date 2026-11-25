@@ -1,3 +1,5 @@
+import { detectDefaultLang, Lang } from './i18n';
+
 export interface PowerupDef {
   id: 'fireball' | 'superbounce' | 'magnet' | 'sweetspot' | 'lowgrav' | 'goldenpitch';
   name: string;
@@ -115,6 +117,7 @@ export interface GameSave {
   soundEnabled: boolean;
   musicEnabled: boolean;
   hapticsEnabled: boolean;
+  lang: Lang;
 }
 
 export const WALLS: WallDef[] = [
@@ -386,6 +389,7 @@ export function createDefaultSave(): GameSave {
     soundEnabled: true,
     musicEnabled: true,
     hapticsEnabled: true,
+    lang: detectDefaultLang(),
   };
 }
 

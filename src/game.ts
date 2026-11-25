@@ -15,6 +15,7 @@ import {
 } from './state';
 import { GameWorld } from './world';
 import { sound } from './audio';
+import { t } from './i18n';
 
 export type GamePhase = 'IDLE' | 'PITCHING' | 'HITSTOP' | 'FLYING' | 'RESULT';
 export type HitQuality = 'PERFECT' | 'GREAT' | 'GOOD' | 'WEAK' | 'MISS';
@@ -246,15 +247,15 @@ export class BaseballGame {
       this.pitchDuration = Math.max(0.62, (this.currentBoss.id === 'flamethrower' ? 0.78 : 0.88) - leagueSpeedBump);
       this.pitchCurve = this.currentBoss.id === 'knuckle' ? 1.35 : 0;
     } else if (isGolden) {
-      this.pitchLabel = '✨ GOLDEN PITCH (2.2×)';
+      this.pitchLabel = t('goldenPitch');
       this.pitchDuration = Math.max(0.68, 0.88 - leagueSpeedBump);
       this.pitchCurve = 0;
     } else if (this.save.totalSwings >= 2 && Math.random() < 0.42) {
-      this.pitchLabel = '🌀 CURVEBALL';
+      this.pitchLabel = t('curveball');
       this.pitchDuration = Math.max(0.7, 0.92 - leagueSpeedBump);
       this.pitchCurve = (Math.random() > 0.5 ? 1 : -1) * 1.05;
     } else {
-      this.pitchLabel = '🔥 FASTBALL';
+      this.pitchLabel = t('fastball');
       this.pitchDuration = Math.max(0.64, 0.86 - Math.min(0.14, this.save.batLevel * 0.004) - leagueSpeedBump);
       this.pitchCurve = 0;
     }
@@ -289,7 +290,7 @@ export class BaseballGame {
     const diff = Math.abs(this.pitchProgress - 0.88);
 
     if (this.pitchProgress < 0.38 || diff > 0.34) {
-      this.handleMiss('TOO EARLY!');
+      this.handleMiss(t('tooEarly'));
       return;
     }
 
@@ -308,7 +309,7 @@ export class BaseballGame {
       this.fovPunch = -9;
       this.ballScale.set(0.72, 0.72, 1.5);
       this.cb.onCallout(
-        this.save.combo > 1 ? `PERFECT!! 🔥x${this.save.combo}` : 'PERFECT!!',
+        this.save.combo > 1 ? `${t('perfect')} 🔥x${this.save.combo}` : t('perfect'),
         '#facc15',
         true
       );
@@ -322,7 +323,7 @@ export class BaseballGame {
       this.addTrauma(0.48);
       this.fovPunch = -4.5;
       this.ballScale.set(0.8, 0.8, 1.35);
-      this.cb.onCallout('GREAT HIT!', '#38bdf8', true);
+      this.cb.onCallout(t('great'), '#38bdf8', true);
       this.world.triggerShockwave(this.ballPos, 0x38bdf8);
       this.world.spawnBurst(this.ballPos, 0x38bdf8, 16, 9);
     } else if (diff <= (0.24 + batSweetAdd) * sweetMult) {
@@ -333,7 +334,7 @@ export class BaseballGame {
       this.hitstopTimer = 0.02;
       this.addTrauma(0.28);
       this.ballScale.set(0.88, 0.88, 1.2);
-      this.cb.onCallout('GOOD!', '#4ade80', false);
+      this.cb.onCallout(t('good'), '#4ade80', false);
       this.world.spawnBurst(this.ballPos, 0xffffff, 10, 7);
     } else {
       this.hitQuality = 'WEAK';
@@ -342,7 +343,7 @@ export class BaseballGame {
       this.save.combo = 0;
       this.hitstopTimer = 0;
       this.addTrauma(0.16);
-      this.cb.onCallout(this.pitchProgress < 0.88 ? 'EARLY!' : 'LATE!', '#fb923c', false);
+      this.cb.onCallout(this.pitchProgress < 0.88 ? t('early') : t('late'), '#fb923c', false);
       this.world.spawnBurst(this.ballPos, 0xffffff, 8, 5);
     }
 
@@ -567,23 +568,23 @@ export class BaseballGame {
           this.poseBatterLoad(Math.min(1, 0.6 + this.pitchProgress * 0.5));
         }
 
-        const t = this.pitchProgress;
-        let xOffset = Math.sin(t * Math.PI) * this.pitchCurve;
+        const pt = this.pitchProgress;
+        let xOffset = Math.sin(pt * Math.PI) * this.pitchCurve;
         if (this.currentBoss?.id === 'knuckle') {
           // Wobble knuckleball zig-zags!
-          xOffset = Math.sin(t * Math.PI * 3.2) * 0.85;
+          xOffset = Math.sin(pt * Math.PI * 3.2) * 0.85;
         }
 
         // Ghost Pitch blinks briefly invisible mid-flight!
         if (this.currentBoss?.id === 'phantom') {
-          this.world.ball.visible = !(t > 0.32 && t < 0.64);
+          this.world.ball.visible = !(pt > 0.32 && pt < 0.64);
         } else {
           this.world.ball.visible = true;
         }
 
-        const x = THREE.MathUtils.lerp(this.pitchReleasePos.x, 0.05, t) + xOffset;
-        const y = THREE.MathUtils.lerp(this.pitchReleasePos.y, 1.3, t) + Math.sin(Math.min(1, t) * Math.PI) * 0.42;
-        const z = THREE.MathUtils.lerp(this.pitchReleasePos.z, 0.15, t);
+        const x = THREE.MathUtils.lerp(this.pitchReleasePos.x, 0.05, pt) + xOffset;
+        const y = THREE.MathUtils.lerp(this.pitchReleasePos.y, 1.3, pt) + Math.sin(Math.min(1, pt) * Math.PI) * 0.42;
+        const z = THREE.MathUtils.lerp(this.pitchReleasePos.z, 0.15, pt);
         this.ballPos.set(x, y, z);
         this.world.ball.position.copy(this.ballPos);
         this.world.ball.rotation.x += dt * 18;
@@ -601,7 +602,7 @@ export class BaseballGame {
 
         if (this.pitchProgress > 1.18 && !this.hasSwung) {
           this.hasSwung = true;
-          this.handleMiss('STRIKE! MISS');
+          this.handleMiss(t('strikeMiss'));
         }
       }
 
@@ -783,7 +784,7 @@ export class BaseballGame {
             sound.playBoing();
             this.world.triggerShockwave(this.ballPos, 0x06b6d4);
             this.world.spawnBurst(this.ballPos, 0x06b6d4, 16, 9);
-            this.cb.onCallout('🚀 BOOST PAD!', '#22d3ee', false);
+            this.cb.onCallout(t('boostPad'), '#22d3ee', false);
           } else if (p.type === 'barrel') {
             p.mesh.visible = false;
             this.boostHitsThisRun += 1;
@@ -795,7 +796,7 @@ export class BaseballGame {
             sound.playExplosion();
             this.world.triggerShockwave(this.ballPos, 0xf97316);
             this.world.spawnBurst(this.ballPos, 0xf97316, 22, 12);
-            this.cb.onCallout('💥 BOOM BOOST!', '#fb923c', true);
+            this.cb.onCallout(t('boomBoost'), '#fb923c', true);
           } else if (p.type === 'taxi') {
             this.boostHitsThisRun += 1;
             const decay = Math.pow(0.76, this.boostHitsThisRun - 1);
@@ -807,7 +808,7 @@ export class BaseballGame {
             sound.playHorn();
             this.world.triggerShockwave(this.ballPos, 0xfacc15);
             this.world.spawnBurst(this.ballPos, 0xfacc15, 18, 10);
-            this.cb.onCallout('🚕 CAR BOUNCE! +25🪙', '#facc15', false);
+            this.cb.onCallout(t('carBounce'), '#facc15', false);
           } else if (p.type === 'drone') {
             p.mesh.visible = false;
             const gemDrop = league.tier >= 3 ? 6 : 4;
@@ -848,7 +849,7 @@ export class BaseballGame {
       if (!this.passedRecordThisRun && this.save.bestDistance >= 20 && dist > this.save.bestDistance) {
         this.passedRecordThisRun = true;
         sound.playNewRecord();
-        this.cb.onCallout('👑 NEW RECORD!!', '#facc15', true);
+        this.cb.onCallout(t('newRecordCallout'), '#facc15', true);
       }
 
       // Rival challenge beaten!
