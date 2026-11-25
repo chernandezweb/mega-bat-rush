@@ -119,44 +119,44 @@ export const WALLS: WallDef[] = [
     distance: 150,
     name: 'PARK FENCE',
     worldUnlocked: 'DOWNTOWN',
-    maxHp: 90,
+    maxHp: 140,
     color: 0xb45309,
     accent: 0xfde68a,
-    rewardGems: 15,
-    coinMultBonus: 0.35,
+    rewardGems: 10,
+    coinMultBonus: 0.25,
   },
   {
     id: 'wall_glass',
     distance: 350,
     name: 'GLASS TOWER',
     worldUnlocked: 'SUNSET CANYON',
-    maxHp: 190,
+    maxHp: 340,
     color: 0x38bdf8,
     accent: 0xe0f2fe,
-    rewardGems: 25,
-    coinMultBonus: 0.55,
+    rewardGems: 18,
+    coinMultBonus: 0.4,
   },
   {
     id: 'wall_cyber',
     distance: 700,
     name: 'CYBER BARRIER',
     worldUnlocked: 'NEON STRIP',
-    maxHp: 340,
+    maxHp: 680,
     color: 0xa855f7,
     accent: 0xf0abfc,
-    rewardGems: 40,
-    coinMultBonus: 0.85,
+    rewardGems: 28,
+    coinMultBonus: 0.6,
   },
   {
     id: 'wall_space',
     distance: 1200,
     name: 'ORBITAL SHIELD',
     worldUnlocked: 'COSMIC ZONE',
-    maxHp: 540,
+    maxHp: 1200,
     color: 0xfacc15,
     accent: 0x38bdf8,
-    rewardGems: 65,
-    coinMultBonus: 1.25,
+    rewardGems: 45,
+    coinMultBonus: 0.9,
   },
 ];
 
@@ -204,7 +204,7 @@ export const GEAR_SETS: GearSetBonus[] = [
     id: 'storm',
     name: 'Storm God Set',
     emoji: '⚡',
-    desc: 'Lightning bounces (+18% bounce carry & +20 coins per bounce!)',
+    desc: 'Lightning bounces (+14% bounce carry & +15 coins per bounce!)',
     helmetId: 'helmet_viking',
     batId: 'bat_hammer',
     trailId: 'trail_electric',
@@ -213,7 +213,7 @@ export const GEAR_SETS: GearSetBonus[] = [
     id: 'midas',
     name: 'Royal Midas Set',
     emoji: '👑',
-    desc: '+60% total coins & every 3rd pitch is Golden!',
+    desc: '+45% total coins & every 4th pitch is Golden!',
     helmetId: 'helmet_crown',
     batId: 'bat_gold',
     trailId: 'trail_gold',
@@ -222,7 +222,7 @@ export const GEAR_SETS: GearSetBonus[] = [
     id: 'cosmic',
     name: 'Cosmic Ace Set',
     emoji: '🌌',
-    desc: '-22% gravity & +1 extra Power Slam every at-bat!',
+    desc: '-18% gravity & +12% launch velocity!',
     helmetId: 'helmet_astro',
     batId: 'bat_galaxy',
     trailId: 'trail_rainbow',
@@ -231,10 +231,10 @@ export const GEAR_SETS: GearSetBonus[] = [
 
 export const LEAGUES: LeagueDef[] = [
   { tier: 0, name: 'Rookie Park', emoji: '⚾', reqDistance: 0, coinMult: 1.0, powerMult: 1.0, relicDesc: 'Welcome to the big leagues!' },
-  { tier: 1, name: 'Minor League', emoji: '🥉', reqDistance: 250, coinMult: 1.8, powerMult: 1.18, relicDesc: 'Relic: +25% Bullseye Slam bounce & 1.8× coins!' },
-  { tier: 2, name: 'Major League', emoji: '🥈', reqDistance: 550, coinMult: 3.0, powerMult: 1.38, relicDesc: 'Relic: Free Fireball every 4th swing & 3× coins!' },
-  { tier: 3, name: 'All-Star Pro', emoji: '🥇', reqDistance: 950, coinMult: 5.0, powerMult: 1.62, relicDesc: 'Relic: 2× Gem drops from chests & 5× coins!' },
-  { tier: 4, name: 'Hall of Fame', emoji: '🏆', reqDistance: 1600, coinMult: 8.5, powerMult: 1.95, relicDesc: 'Relic: +1 permanent Power Slam & 8.5× coins!' },
+  { tier: 1, name: 'Minor League', emoji: '🥉', reqDistance: 300, coinMult: 1.45, powerMult: 1.12, relicDesc: 'Relic: +15% Wall Smash damage & 1.45× coins!' },
+  { tier: 2, name: 'Major League', emoji: '🥈', reqDistance: 650, coinMult: 2.1, powerMult: 1.26, relicDesc: 'Relic: Free Fireball every 5th swing & 2.1× coins!' },
+  { tier: 3, name: 'All-Star Pro', emoji: '🥇', reqDistance: 1150, coinMult: 3.0, powerMult: 1.42, relicDesc: 'Relic: +50% Gem drops from chests & 3× coins!' },
+  { tier: 4, name: 'Hall of Fame', emoji: '🏆', reqDistance: 1850, coinMult: 4.5, powerMult: 1.62, relicDesc: 'Relic: +20% permanent bounce carry & 4.5× coins!' },
 ];
 
 export const POWERUPS: PowerupDef[] = [
@@ -242,8 +242,8 @@ export const POWERUPS: PowerupDef[] = [
     id: 'fireball',
     name: 'Fireball Slugger',
     emoji: '🔥',
-    desc: '+28% launch power & extra wall smash damage',
-    cost: 65,
+    desc: '+22% launch power & extra wall smash damage',
+    cost: 120,
     currency: 'coins',
     color: '#ef4444',
   },
@@ -251,8 +251,8 @@ export const POWERUPS: PowerupDef[] = [
     id: 'sweetspot',
     name: 'Giant Sweet Spot',
     emoji: '🎯',
-    desc: 'Doubles the PERFECT hit window!',
-    cost: 50,
+    desc: 'Widens the PERFECT hit window!',
+    cost: 90,
     currency: 'coins',
     color: '#22c55e',
   },
@@ -260,8 +260,8 @@ export const POWERUPS: PowerupDef[] = [
     id: 'superbounce',
     name: 'Hyper Bounce',
     emoji: '⚡',
-    desc: 'Bouncier ball + extra jump pads & +1 Slam',
-    cost: 80,
+    desc: 'Bouncier ball + extra jump pads ahead',
+    cost: 140,
     currency: 'coins',
     color: '#06b6d4',
   },
@@ -269,8 +269,8 @@ export const POWERUPS: PowerupDef[] = [
     id: 'lowgrav',
     name: 'Moon Glide',
     emoji: '🪶',
-    desc: '22% lower gravity for longer hangtime',
-    cost: 95,
+    desc: '18% lower gravity for longer hangtime',
+    cost: 160,
     currency: 'coins',
     color: '#6366f1',
   },
@@ -279,7 +279,7 @@ export const POWERUPS: PowerupDef[] = [
     name: 'Coin Magnet',
     emoji: '🧲',
     desc: 'Pulls air coin rings & 2× ring payout',
-    cost: 110,
+    cost: 180,
     currency: 'coins',
     color: '#a855f7',
   },
@@ -287,8 +287,8 @@ export const POWERUPS: PowerupDef[] = [
     id: 'goldenpitch',
     name: 'Golden Pitch',
     emoji: '💎',
-    desc: '2.5× total coin payout on your next hit!',
-    cost: 8,
+    desc: '2.2× total coin payout on your next hit!',
+    cost: 15,
     currency: 'gems',
     color: '#f59e0b',
   },
@@ -440,12 +440,12 @@ export function getWallCoinMultiplier(state: GameSave): number {
   return Number(mult.toFixed(2));
 }
 
-export function getUpgradeCost(level: number, base = 25, growth = 1.22): number {
-  return Math.floor(base * Math.pow(growth, level - 1) + (level - 1) * 10);
+export function getUpgradeCost(level: number, base = 35, growth = 1.34): number {
+  return Math.floor(base * Math.pow(growth, level - 1) + (level - 1) * 18);
 }
 
 export function getIncomeMultiplier(level: number): number {
-  return Number((1 + (level - 1) * 0.25).toFixed(2));
+  return Number((1 + (level - 1) * 0.16).toFixed(2));
 }
 
 export function getBatTierName(level: number): string {

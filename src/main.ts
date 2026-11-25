@@ -51,9 +51,6 @@ const flightDistance = $('flight-distance');
 const flightSpeed = $('flight-speed');
 const flightZone = $('flight-zone');
 const flightCoinsLive = $('flight-coins-live');
-const slamPrompt = $('slam-prompt');
-const slamBarFill = $('slam-bar-fill');
-const slamText = $('slam-text');
 
 const calloutLayer = $('callout-layer');
 const upgradeDock = $('upgrade-dock');
@@ -132,7 +129,7 @@ function startMultiplierReel(): void {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (!bonusClaimed && !resultOverlay.classList.contains('hidden')) {
-      reelPos += reelDir * dt * 165;
+      reelPos += reelDir * dt * 225;
       if (reelPos >= 98) { reelPos = 98; reelDir = -1; }
       if (reelPos <= 2) { reelPos = 2; reelDir = 1; }
       multReelNeedle.style.left = `${reelPos}%`;
@@ -143,10 +140,9 @@ function startMultiplierReel(): void {
 }
 
 function getReelMultiplier(pos: number): number {
-  // Segments: 1.2fr (0..23.5) | 1fr (23.5..43.1) | 0.7fr (43.1..56.9) | 1fr (56.9..76.5) | 1.2fr (76.5..100)
-  if (pos >= 43.1 && pos <= 56.9) return 5.0;
-  if (pos >= 23.5 && pos <= 76.5) return 2.0;
-  return 1.5;
+  if (pos >= 44.5 && pos <= 55.5) return 3.0;
+  if (pos >= 23.5 && pos <= 76.5) return 1.5;
+  return 1.2;
 }
 
 function bumpPill(el: HTMLElement): void {
@@ -215,9 +211,9 @@ function updateHUD(): void {
   }
 
   // Upgrade cards
-  const batCost = getUpgradeCost(save.batLevel, 25, 1.22);
-  const muscleCost = getUpgradeCost(save.muscleLevel, 25, 1.22);
-  const incomeCost = getUpgradeCost(save.incomeLevel, 30, 1.24);
+  const batCost = getUpgradeCost(save.batLevel, 35, 1.34);
+  const muscleCost = getUpgradeCost(save.muscleLevel, 35, 1.34);
+  const incomeCost = getUpgradeCost(save.incomeLevel, 40, 1.36);
 
   $('lv-bat').textContent = String(save.batLevel);
   $('tier-bat').textContent = getBatTierName(save.batLevel);
@@ -289,20 +285,11 @@ const game = new BaseballGame(canvas, save, rival, {
     const pct = Math.min(100, Math.max(0, (progress / 1.15) * 100));
     timingCursor.style.left = `${pct}%`;
   },
-  onFlightUpdate: (dist, speedMph, zoneName, liveCoins, slamsLeft, canSlam) => {
+  onFlightUpdate: (dist, speedMph, zoneName, liveCoins) => {
     flightDistance.textContent = `${dist}m`;
     flightSpeed.textContent = `${speedMph} mph`;
     flightZone.textContent = zoneName;
     flightCoinsLive.textContent = `+${formatNumber(liveCoins)} 🪙`;
-    slamBarFill.style.width = slamsLeft > 0 ? '100%' : '0%';
-    slamPrompt.classList.toggle('ready', canSlam);
-    slamPrompt.classList.toggle('hidden', false);
-    slamText.textContent =
-      slamsLeft > 0
-        ? canSlam
-          ? `⚡ TAP SLAM (${slamsLeft}) • DRAG TO STEER`
-          : `↔️ DRAG TO STEER • SLAM (${slamsLeft})`
-        : '↔️ DRAG LEFT/RIGHT TO STEER!';
   },
   onCallout: showCallout,
   onRunComplete: (res) => {
@@ -355,10 +342,10 @@ const game = new BaseballGame(canvas, save, rival, {
       btnOpenChest.classList.add('hidden');
     }
 
-    // 5x Multiplier Reel
+    // 3x Multiplier Reel
     multReelWrap.classList.remove('hidden');
     btnBonus2x.disabled = false;
-    btnBonus2x.innerHTML = '<span>🎯 STOP REEL FOR UP TO 5×!</span>';
+    btnBonus2x.innerHTML = '<span>🎯 STOP REEL FOR UP TO 3×!</span>';
     startMultiplierReel();
 
     bumpPill(coinPill);
@@ -395,9 +382,6 @@ const endDrag = () => {
   if (!ptrActive) return;
   ptrActive = false;
   game.setSteer(0);
-  if (!ptrDragged && game.phase === 'FLYING') {
-    game.handlePrimaryTap(); // quick tap triggers Power Slam!
-  }
 };
 
 window.addEventListener('pointerup', endDrag);
@@ -430,7 +414,7 @@ function buyUpgrade(type: 'bat' | 'muscle' | 'income'): void {
   const level =
     type === 'bat' ? save.batLevel : type === 'muscle' ? save.muscleLevel : save.incomeLevel;
   const cost =
-    type === 'income' ? getUpgradeCost(level, 30, 1.24) : getUpgradeCost(level, 25, 1.22);
+    type === 'income' ? getUpgradeCost(level, 40, 1.36) : getUpgradeCost(level, 35, 1.34);
 
   if (save.coins < cost) {
     sound.playMiss();
@@ -479,13 +463,13 @@ btnBonus2x.addEventListener('click', () => {
   save.totalCoinsEarned += extraCoins;
   saveGame(save);
 
-  if (mult >= 5) sound.playNewRecord();
+  if (mult >= 3) sound.playNewRecord();
   else sound.playCoin();
 
   bumpPill(coinPill);
   resultCoins.textContent = `+${formatNumber(lastRunResult.coinsEarned + extraCoins)}`;
   btnBonus2x.disabled = true;
-  btnBonus2x.innerHTML = `<span>${mult >= 5 ? '🔥 JACKPOT' : '✓'} ${mult}× CLAIMED! (+${formatNumber(extraCoins)})</span>`;
+  btnBonus2x.innerHTML = `<span>${mult >= 3 ? '🔥 JACKPOT' : '✓'} ${mult}× CLAIMED! (+${formatNumber(extraCoins)})</span>`;
   updateHUD();
 });
 
@@ -546,20 +530,20 @@ chestBoxWrap.addEventListener('click', () => {
   sound.playChestOpen();
 
   const league = getCurrentLeague(save);
-  const gemMult = league.tier >= 3 ? 2 : 1;
-  const bonusCoins = Math.round((110 + save.batLevel * 28) * league.coinMult);
-  const bonusGems = (8 + Math.floor(Math.random() * 9)) * gemMult;
+  const gemMult = league.tier >= 3 ? 1.5 : 1;
+  const bonusCoins = Math.round((65 + save.batLevel * 18) * league.coinMult);
+  const bonusGems = Math.round((4 + Math.floor(Math.random() * 4)) * gemMult);
   save.coins += bonusCoins;
   save.gems += bonusGems;
 
-  // Card 3: 45% chance for a FREE unowned Shop Gear item, otherwise a FREE activated Powerup!
+  // Card 3: 22% chance for a FREE unowned Shop Gear item, otherwise a FREE activated Powerup!
   const unowned = SHOP_ITEMS.filter((i) => !save.ownedItems.includes(i.id));
   let card3Emoji = '🔥';
   let card3Val = 'Fireball';
   let card3Label = 'FREE POWERUP';
   let isLegendary = false;
 
-  if (unowned.length > 0 && Math.random() < 0.45) {
+  if (unowned.length > 0 && Math.random() < 0.22) {
     const gift = unowned[Math.floor(Math.random() * Math.min(5, unowned.length))];
     save.ownedItems.push(gift.id);
     card3Emoji = gift.emoji;

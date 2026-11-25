@@ -41,9 +41,7 @@ export interface GameCallbacks {
     distance: number,
     speedMph: number,
     zoneName: string,
-    liveCoins: number,
-    slamsLeft: number,
-    canSlam: boolean
+    liveCoins: number
   ) => void;
   onCallout: (text: string, color?: string, big?: boolean) => void;
   onRunComplete: (result: RunResult) => void;
@@ -95,8 +93,6 @@ export class BaseballGame {
   private rivalBeatenName: string | null = null;
   private hitQuality: HitQuality = 'GOOD';
   private passedRecordThisRun = false;
-  private slamsLeft = 1;
-  private isSlamming = false;
   private runActivePowerups: Record<string, boolean> = {};
   private hitWallIdsThisRun: Set<string> = new Set();
 
@@ -137,12 +133,12 @@ export class BaseballGame {
   }
 
   public getSwingsUntilBoss(): number {
-    const rem = 5 - ((this.save.totalSwings + 1) % 5);
-    return rem === 5 ? 0 : rem;
+    const rem = 6 - ((this.save.totalSwings + 1) % 6);
+    return rem === 6 ? 0 : rem;
   }
 
   public isNextSwingBoss(): boolean {
-    return (this.save.totalSwings + 1) % 5 === 0;
+    return (this.save.totalSwings + 1) % 6 === 0;
   }
 
   public handlePrimaryTap(): void {
@@ -150,8 +146,6 @@ export class BaseballGame {
       this.startPitch();
     } else if (this.phase === 'PITCHING' && !this.hasSwung) {
       this.executeSwing();
-    } else if (this.phase === 'FLYING') {
-      this.tryPowerSlam();
     }
   }
 
@@ -162,13 +156,12 @@ export class BaseballGame {
     this.pitchTimer = 0;
     this.pitchProgress = 0;
     this.releaseCaptured = false;
-    this.isSlamming = false;
     this.steerTarget = 0;
     this.shakeIntensity = 0;
 
     // Preview upcoming Boss Pitcher on the mound when Boss Duel is ready!
     if (this.isNextSwingBoss()) {
-      const bossIdx = Math.floor(this.save.totalSwings / 5) % BOSSES.length;
+      const bossIdx = Math.floor(this.save.totalSwings / 6) % BOSSES.length;
       this.currentBoss = BOSSES[bossIdx];
     } else {
       this.currentBoss = null;
@@ -216,7 +209,6 @@ export class BaseballGame {
     this.wallBrokenName = null;
     this.rivalBeatenName = null;
     this.passedRecordThisRun = false;
-    this.isSlamming = false;
     this.steerTarget = 0;
     this.hitWallIdsThisRun.clear();
 
@@ -224,40 +216,34 @@ export class BaseballGame {
     const league = getCurrentLeague(this.save);
 
     this.runActivePowerups = { ...this.save.activePowerups };
-    // League 2+ Relic: Free Fireball every 4th swing!
-    if (league.tier >= 2 && (this.save.totalSwings + 1) % 4 === 0) {
+    // League 2+ Relic: Free Fireball every 5th swing!
+    if (league.tier >= 2 && (this.save.totalSwings + 1) % 5 === 0) {
       this.runActivePowerups.fireball = true;
     }
 
-    // Slams: 1 base + 1 Hyper Bounce + 1 Cosmic Set + 1 Hall of Fame Relic
-    this.slamsLeft =
-      1 +
-      (this.runActivePowerups.superbounce ? 1 : 0) +
-      (activeSet?.id === 'cosmic' ? 1 : 0) +
-      (league.tier >= 4 ? 1 : 0);
-
-    const midasGolden = activeSet?.id === 'midas' && (this.save.totalSwings + 1) % 3 === 0;
+    const midasGolden = activeSet?.id === 'midas' && (this.save.totalSwings + 1) % 4 === 0;
     const isGolden =
       !!this.runActivePowerups.goldenpitch ||
       midasGolden ||
       this.currentBoss?.id === 'emperor';
     this.pitchIsGolden = isGolden;
 
+    const leagueSpeedBump = league.tier * 0.04;
     if (this.currentBoss) {
       this.pitchLabel = `${this.currentBoss.emoji} BOSS: ${this.currentBoss.pitchName}`;
-      this.pitchDuration = this.currentBoss.id === 'flamethrower' ? 0.84 : 0.96;
-      this.pitchCurve = this.currentBoss.id === 'knuckle' ? 1.25 : 0;
+      this.pitchDuration = Math.max(0.62, (this.currentBoss.id === 'flamethrower' ? 0.78 : 0.88) - leagueSpeedBump);
+      this.pitchCurve = this.currentBoss.id === 'knuckle' ? 1.35 : 0;
     } else if (isGolden) {
-      this.pitchLabel = '✨ GOLDEN PITCH (2.5×)';
-      this.pitchDuration = 0.94;
+      this.pitchLabel = '✨ GOLDEN PITCH (2.2×)';
+      this.pitchDuration = Math.max(0.68, 0.88 - leagueSpeedBump);
       this.pitchCurve = 0;
-    } else if (this.save.totalSwings >= 3 && Math.random() < 0.35) {
+    } else if (this.save.totalSwings >= 2 && Math.random() < 0.42) {
       this.pitchLabel = '🌀 CURVEBALL';
-      this.pitchDuration = 1.0;
-      this.pitchCurve = (Math.random() > 0.5 ? 1 : -1) * 0.95;
+      this.pitchDuration = Math.max(0.7, 0.92 - leagueSpeedBump);
+      this.pitchCurve = (Math.random() > 0.5 ? 1 : -1) * 1.05;
     } else {
       this.pitchLabel = '🔥 FASTBALL';
-      this.pitchDuration = Math.max(0.76, 0.92 - Math.min(0.12, this.save.batLevel * 0.003));
+      this.pitchDuration = Math.max(0.64, 0.86 - Math.min(0.14, this.save.batLevel * 0.004) - leagueSpeedBump);
       this.pitchCurve = 0;
     }
 
@@ -286,21 +272,21 @@ export class BaseballGame {
     const league = getCurrentLeague(this.save);
 
     const sweetMult =
-      (1 + (helmetItem.sweetSpotBonus || 0)) * (this.runActivePowerups.sweetspot ? 1.85 : 1.0);
-    const batSweetAdd = Math.min(0.045, (this.save.batLevel - 1) * 0.0025);
+      (1 + (helmetItem.sweetSpotBonus || 0)) * (this.runActivePowerups.sweetspot ? 1.65 : 1.0);
+    const batSweetAdd = Math.min(0.03, (this.save.batLevel - 1) * 0.0018);
     const diff = Math.abs(this.pitchProgress - 0.88);
 
-    if (this.pitchProgress < 0.35 || diff > 0.36) {
+    if (this.pitchProgress < 0.38 || diff > 0.34) {
       this.handleMiss('TOO EARLY!');
       return;
     }
 
-    let qualityMult = 0.68;
+    let qualityMult = 0.65;
     let launchAngleDeg = 27;
 
-    if (diff <= (0.06 + batSweetAdd * 0.4) * sweetMult) {
+    if (diff <= (0.045 + batSweetAdd * 0.35) * sweetMult) {
       this.hitQuality = 'PERFECT';
-      qualityMult = 1.32;
+      qualityMult = 1.28;
       launchAngleDeg = 35;
       this.save.combo += 1;
       this.save.totalPerfects += 1;
@@ -314,7 +300,7 @@ export class BaseballGame {
       );
       this.world.triggerShockwave(this.ballPos, 0xfacc15);
       this.world.spawnBurst(this.ballPos, 0xfacc15, 24, 12);
-    } else if (diff <= (0.135 + batSweetAdd * 0.75) * sweetMult) {
+    } else if (diff <= (0.115 + batSweetAdd * 0.65) * sweetMult) {
       this.hitQuality = 'GREAT';
       qualityMult = 1.06;
       launchAngleDeg = 31;
@@ -358,22 +344,24 @@ export class BaseballGame {
     saveGame(this.save);
     this.cb.onStateChanged();
 
-    const equipPower = 1 + (batItem.powerBonus || 0) + (helmetItem.powerBonus || 0);
-    const upgradeFactor = 1 + (this.save.batLevel - 1) * 0.08 + (this.save.muscleLevel - 1) * 0.095;
-    const comboBonus = 1 + Math.min(0.35, this.save.combo * 0.05);
-    const fireballBonus = this.runActivePowerups.fireball ? 1.28 : 1.0;
+    const activeSet = getActiveGearSet(this.save);
+    const equipPower =
+      1 + (batItem.powerBonus || 0) + (helmetItem.powerBonus || 0) + (activeSet?.id === 'cosmic' ? 0.12 : 0);
+    const upgradeFactor = 1 + (this.save.batLevel - 1) * 0.065 + (this.save.muscleLevel - 1) * 0.08;
+    const comboBonus = 1 + Math.min(0.28, this.save.combo * 0.04);
+    const fireballBonus = this.runActivePowerups.fireball ? 1.22 : 1.0;
     const heavyBallFactor = this.currentBoss?.id === 'emperor' ? 0.9 : 1.0;
 
     const launchSpeed =
-      22.5 *
-      Math.pow(upgradeFactor, 0.56) *
+      21.5 *
+      Math.pow(upgradeFactor, 0.52) *
       qualityMult *
       equipPower *
       comboBonus *
       fireballBonus *
       league.powerMult *
       heavyBallFactor;
-    this.maxRunSpeed = launchSpeed * 1.18;
+    this.maxRunSpeed = launchSpeed * 1.15;
 
     const angleRad = (launchAngleDeg * Math.PI) / 180;
     const timingBias = (this.pitchProgress - 0.88) * 2.6;
@@ -415,16 +403,6 @@ export class BaseballGame {
     }, 680);
   }
 
-  private tryPowerSlam(): void {
-    if (this.isSlamming || this.slamsLeft <= 0 || this.ballPos.y < 2.1) return;
-    this.isSlamming = true;
-    this.slamsLeft -= 1;
-    this.ballVel.y = Math.min(this.ballVel.y, -23);
-    sound.playSlam();
-    this.cb.onCallout('⚡ POWER SLAM!', '#38bdf8', false);
-    this.world.spawnBurst(this.ballPos, 0x38bdf8, 14, 8);
-  }
-
   private recordMissionProgress(type: 'distance' | 'perfects' | 'upgrades' | 'bonuses', value: number): void {
     for (const m of this.save.missions) {
       if (m.type === type) {
@@ -454,26 +432,26 @@ export class BaseballGame {
 
     const gearCoinMult =
       (1 + (batItem.coinBonus || 0) + (helmetItem.coinBonus || 0)) *
-      (activeSet?.id === 'midas' ? 1.6 : 1.0);
+      (activeSet?.id === 'midas' ? 1.45 : 1.0);
     const wallCoinMult = getWallCoinMultiplier(this.save);
     const incomeMult = getIncomeMultiplier(this.save.incomeLevel);
     const qualityBonus =
-      this.hitQuality === 'PERFECT' ? 1.45 : this.hitQuality === 'GREAT' ? 1.18 : 1.0;
+      this.hitQuality === 'PERFECT' ? 1.38 : this.hitQuality === 'GREAT' ? 1.14 : 1.0;
     const bossOrGoldenMult = this.currentBoss
       ? this.currentBoss.coinMult
       : this.pitchIsGolden
-      ? 2.5
+      ? 2.2
       : 1.0;
 
     const baseCoins = Math.round(
-      distance * 0.65 * incomeMult * gearCoinMult * wallCoinMult * league.coinMult * qualityBonus * bossOrGoldenMult
+      distance * 0.42 * incomeMult * gearCoinMult * wallCoinMult * league.coinMult * qualityBonus * bossOrGoldenMult
     );
-    const coinsEarned = Math.max(12, baseCoins + this.bonusCoins);
+    const coinsEarned = Math.max(10, baseCoins + this.bonusCoins);
 
     let gemsEarned = this.bonusGems;
-    if (isNewRecord && distance >= 35) gemsEarned += 4;
-    if (distance >= 200) gemsEarned += Math.floor(distance / 200) * 3;
-    if (this.hitQuality === 'PERFECT' && this.save.combo >= 3) gemsEarned += 3;
+    if (isNewRecord && distance >= 40) gemsEarned += 2;
+    if (distance >= 300) gemsEarned += Math.floor(distance / 300) * 2;
+    if (this.hitQuality === 'PERFECT' && this.save.combo >= 4) gemsEarned += 2;
 
     this.save.coins += coinsEarned;
     this.save.gems += gemsEarned;
@@ -632,11 +610,11 @@ export class BaseballGame {
       const league = getCurrentLeague(this.save);
       const glideFactor =
         (1 - (helmetItem.glideBonus || 0)) *
-        (this.runActivePowerups.lowgrav ? 0.78 : 1.0) *
-        (activeSet?.id === 'cosmic' ? 0.78 : 1.0);
+        (this.runActivePowerups.lowgrav ? 0.82 : 1.0) *
+        (activeSet?.id === 'cosmic' ? 0.82 : 1.0);
 
       // Gravity & realistic air drag (plus smooth aerodynamic ceiling above 55m so the city stays visible!)
-      const gravity = this.isSlamming ? 42 : 24.5 * glideFactor;
+      const gravity = 25.0 * glideFactor;
       this.ballVel.y -= gravity * dt;
       if (this.ballPos.y > 55 && this.ballVel.y > 0) {
         this.ballVel.y *= Math.pow(0.18, dt);
@@ -666,7 +644,7 @@ export class BaseballGame {
           this.hitWallIdsThisRun.add(wall.id);
           const speedNow = Math.abs(this.ballVel.z);
           const dmg = Math.round(
-            speedNow * 3.1 * (this.runActivePowerups.fireball ? 1.45 : 1.0) * (this.isSlamming ? 1.3 : 1.0)
+            speedNow * 2.8 * (this.runActivePowerups.fireball ? 1.4 : 1.0) * (league.tier >= 1 ? 1.15 : 1.0)
           );
           const prevDmg = this.save.wallDamage[wall.id] || 0;
           const totalDmg = prevDmg + dmg;
@@ -713,39 +691,27 @@ export class BaseballGame {
           this.bounces += 1;
           const bounceUpgrade = Math.min(0.08, (this.save.incomeLevel - 1) * 0.004);
           const superBounceBonus = this.runActivePowerups.superbounce ? 0.12 : 0;
-          const stormBonus = activeSet?.id === 'storm' ? 0.08 : 0;
-          const restitution = Math.min(0.7, 0.44 + bounceUpgrade + superBounceBonus + stormBonus);
+          const stormBonus = activeSet?.id === 'storm' ? 0.07 : 0;
+          const hofBonus = league.tier >= 4 ? 0.06 : 0;
+          const restitution = Math.min(0.7, 0.44 + bounceUpgrade + superBounceBonus + stormBonus + hofBonus);
 
-          if (this.isSlamming) {
-            this.isSlamming = false;
-            const relicMult = league.tier >= 1 ? 1.2 : 1.0;
-            this.ballVel.y = Math.min(14.5, Math.max(8, impactVy * 0.54 * relicMult));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 4.4 * relicMult);
-            this.shakeIntensity = 0.28;
-            sound.playBoing();
-            this.world.triggerShockwave(this.ballPos, 0x38bdf8);
-            this.world.spawnBurst(this.ballPos, 0x38bdf8, 18, 9);
-            this.cb.onCallout('SLAM BOUNCE!', '#38bdf8', false);
+          this.ballVel.y = impactVy * restitution;
+          const friction = this.runActivePowerups.superbounce
+            ? 0.85
+            : activeSet?.id === 'storm'
+            ? 0.81
+            : 0.74;
+          this.ballVel.z *= friction;
+          sound.playBounce(Math.min(1, impactVy / 20));
+          if (activeSet?.id === 'storm') {
+            this.bonusCoins += 15;
+            this.world.spawnBurst(this.ballPos, 0x38bdf8, 10, 7);
           } else {
-            this.ballVel.y = impactVy * restitution;
-            const friction = this.runActivePowerups.superbounce
-              ? 0.85
-              : activeSet?.id === 'storm'
-              ? 0.82
-              : 0.74;
-            this.ballVel.z *= friction;
-            sound.playBounce(Math.min(1, impactVy / 20));
-            if (activeSet?.id === 'storm') {
-              this.bonusCoins += 20;
-              this.world.spawnBurst(this.ballPos, 0x38bdf8, 10, 7);
-            } else {
-              this.world.spawnBurst(this.ballPos, 0xd1d5db, 5, 4);
-            }
+            this.world.spawnBurst(this.ballPos, 0xd1d5db, 5, 4);
           }
         } else {
           this.ballVel.y = 0;
           this.ballVel.z *= Math.pow(0.18, dt);
-          this.isSlamming = false;
         }
       }
 
@@ -771,55 +737,41 @@ export class BaseballGame {
           this.save.totalBonuses += 1;
           this.recordMissionProgress('bonuses', 1);
 
-          // Bullseye Slam check!
-          const bullseye = this.isSlamming && (p.type === 'pad' || p.type === 'barrel' || p.type === 'taxi');
-          if (bullseye) {
-            this.slamsLeft = Math.min(3, this.slamsLeft + 1);
-            this.isSlamming = false;
-            this.cb.onCallout('🎯 BULLSEYE SLAM! +1⚡', '#facc15', true);
-          }
-
           if (p.type === 'pad') {
             this.boostHitsThisRun += 1;
             const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
-            const bMult = bullseye ? 1.3 : 1.0;
-            this.ballVel.y = Math.max(11 * decay, Math.min(16, (Math.abs(this.ballVel.y) + 7 * decay) * bMult));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 5.5 * decay * bMult);
-            this.isSlamming = false;
+            this.ballVel.y = Math.max(11 * decay, Math.min(16, Math.abs(this.ballVel.y) + 7 * decay));
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 5.5 * decay);
             this.shakeIntensity = 0.24;
             sound.playBoing();
             this.world.triggerShockwave(this.ballPos, 0x06b6d4);
             this.world.spawnBurst(this.ballPos, 0x06b6d4, 16, 9);
-            if (!bullseye) this.cb.onCallout('🚀 BOOST PAD!', '#22d3ee', false);
+            this.cb.onCallout('🚀 BOOST PAD!', '#22d3ee', false);
           } else if (p.type === 'barrel') {
             p.mesh.visible = false;
             this.boostHitsThisRun += 1;
             const decay = Math.pow(0.74, this.boostHitsThisRun - 1);
-            const bMult = bullseye ? 1.3 : 1.0;
-            this.ballVel.y = Math.max(11 * decay, Math.min(17, (Math.abs(this.ballVel.y) + 8 * decay) * bMult));
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 7 * decay * bMult);
-            this.isSlamming = false;
+            this.ballVel.y = Math.max(11 * decay, Math.min(17, Math.abs(this.ballVel.y) + 8 * decay));
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 7 * decay);
             this.shakeIntensity = 0.38;
             sound.playExplosion();
             this.world.triggerShockwave(this.ballPos, 0xf97316);
             this.world.spawnBurst(this.ballPos, 0xf97316, 22, 12);
-            if (!bullseye) this.cb.onCallout('💥 BOOM BOOST!', '#fb923c', true);
+            this.cb.onCallout('💥 BOOM BOOST!', '#fb923c', true);
           } else if (p.type === 'taxi') {
             this.boostHitsThisRun += 1;
             const decay = Math.pow(0.76, this.boostHitsThisRun - 1);
-            const bMult = bullseye ? 1.3 : 1.0;
-            this.ballVel.y = Math.max(12 * decay, 14 * bMult);
-            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 6.5 * decay * bMult);
-            this.isSlamming = false;
-            this.bonusCoins += 35;
+            this.ballVel.y = Math.max(12 * decay, 14);
+            this.ballVel.z = Math.max(-this.maxRunSpeed, this.ballVel.z - 6.5 * decay);
+            this.bonusCoins += 25;
             this.shakeIntensity = 0.3;
             sound.playHorn();
             this.world.triggerShockwave(this.ballPos, 0xfacc15);
             this.world.spawnBurst(this.ballPos, 0xfacc15, 18, 10);
-            if (!bullseye) this.cb.onCallout('🚕 TAXI BOUNCE! +35🪙', '#facc15', false);
+            this.cb.onCallout('🚕 CAR BOUNCE! +25🪙', '#facc15', false);
           } else if (p.type === 'drone') {
             p.mesh.visible = false;
-            const gemDrop = league.tier >= 3 ? 10 : 5;
+            const gemDrop = league.tier >= 3 ? 6 : 4;
             this.bonusGems += gemDrop;
             this.chestsWon += 1;
             sound.playChestOpen();
@@ -829,7 +781,7 @@ export class BaseballGame {
           } else if (p.type === 'ring') {
             p.mesh.visible = false;
             const ringCoins = Math.round(
-              (18 + this.save.incomeLevel * 10) * (magnetActive ? 2 : 1) * (this.pitchIsGolden ? 2 : 1)
+              (12 + this.save.incomeLevel * 7) * (magnetActive ? 2 : 1) * (this.pitchIsGolden ? 2 : 1)
             );
             this.bonusCoins += ringCoins;
             sound.playCoin();
@@ -890,17 +842,10 @@ export class BaseballGame {
 
       const incomeMult = getIncomeMultiplier(this.save.incomeLevel);
       const liveCoins =
-        Math.round(dist * 0.65 * incomeMult * league.coinMult * (this.pitchIsGolden ? 2.5 : 1)) +
+        Math.round(dist * 0.42 * incomeMult * league.coinMult * (this.pitchIsGolden ? 2.2 : 1)) +
         this.bonusCoins;
       const biome = this.world.getBiomeInfo(dist);
-      this.cb.onFlightUpdate(
-        dist,
-        Math.round(speed * 2.237),
-        biome.name,
-        liveCoins,
-        this.slamsLeft,
-        this.slamsLeft > 0 && this.ballPos.y >= 2.1 && !this.isSlamming
-      );
+      this.cb.onFlightUpdate(dist, Math.round(speed * 2.237), biome.name, liveCoins);
 
       if (this.ballPos.y <= 0.25 && Math.abs(this.ballVel.z) < 1.8 && Math.abs(this.ballVel.y) < 0.6) {
         this.finishRun();
