@@ -1602,3 +1602,326 @@ html, body {
   box-shadow: 0 5px 0 #14532d;
 }
 .btn-chest-claim:active { transform: translateY(2px); }
+
+/* =====================================================================
+   AAA SUPERCELL / BRAWL STARS COHESIVE UI OVERHAUL
+   Matches the polished Midnight-Royal & Gold Mystery Chest aesthetic!
+   ===================================================================== */
+
+/* Dark metallic glass currency pills */
+.currency-pill {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 2.5px solid #020617;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.22),
+    0 4px 0 rgba(2, 6, 23, 0.65),
+    0 8px 18px rgba(0, 0, 0, 0.28);
+  padding: 4px 14px 4px 5px;
+}
+
+.currency-val {
+  color: #ffffff;
+  text-shadow: 0 2px 0 #020617;
+  font-size: 1.2rem;
+}
+
+.record-badge {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.95));
+  border: 2px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  padding: 4px 14px;
+}
+
+.league-chip, .boss-chip {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.94));
+  border: 1.5px solid rgba(148, 163, 184, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Chunky glossy 3D arcade squircle side buttons */
+.side-btn {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  border: 2.5px solid #020617;
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.25),
+    0 5px 0 #020617,
+    0 8px 16px rgba(0, 0, 0, 0.32);
+  overflow: visible;
+}
+
+.side-btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.3),
+    0 2px 0 #020617;
+}
+
+.settings-btn {
+  background: linear-gradient(180deg, #64748b 0%, #334155 100%);
+}
+.powerup-btn {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+}
+.quest-btn, .shop-btn {
+  background: linear-gradient(180deg, #fde047 0%, #d97706 100%);
+}
+.league-btn {
+  background: linear-gradient(180deg, #c084fc 0%, #6d28d9 100%);
+}
+
+/* Glossy 3D Comic Upgrade Cards */
+.upgrade-card {
+  border: 3px solid #020617;
+  border-radius: 18px;
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.65),
+    0 6px 0 #020617,
+    0 10px 22px rgba(0, 0, 0, 0.38);
+}
+
+.card-buy-btn {
+  border: 2.5px solid #020617;
+  border-radius: 12px;
+  padding: 7px 6px;
+  box-shadow:
+    inset 0 2.5px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.28),
+    0 3px 0 #020617;
+}
+
+/* Royal Midnight & Gold Result Card (matches Mystery Chest!) */
+#result-overlay {
+  background: radial-gradient(circle at 50% 45%, rgba(30, 27, 75, 0.84), rgba(2, 6, 23, 0.92));
+  backdrop-filter: blur(8px);
+}
+
+.result-card {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 3.5px solid #facc15;
+  border-radius: 28px;
+  padding: 22px 18px 18px;
+  color: #ffffff;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 3px #020617,
+    0 18px 42px rgba(0, 0, 0, 0.65),
+    0 0 36px rgba(250, 204, 21, 0.2);
+}
+
+.result-quality {
+  font-size: 1.4rem;
+  color: #38bdf8;
+  text-shadow: 0 2px 0 #020617;
+  letter-spacing: 0.6px;
+}
+
+.result-dist-num {
+  color: #ffffff;
+  font-size: 3.9rem;
+  -webkit-text-stroke: 2px #020617;
+  text-shadow: 0 5px 0 #020617, 0 0 22px rgba(56, 189, 248, 0.4);
+  margin: 0 0 12px;
+}
+
+.result-stat {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1.5px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 9px 4px;
+}
+
+.r-label {
+  color: #94a3b8;
+  letter-spacing: 0.4px;
+}
+
+.r-val {
+  color: #f8fafc;
+  font-size: 1.18rem;
+  text-shadow: 0 2px 0 #020617;
+}
+
+.milestone-tag {
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
+  border: 2px solid #facc15;
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  padding: 3px 11px;
+}
+
+.result-reward-box {
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.22), rgba(217, 119, 6, 0.16));
+  border: 2.5px solid #facc15;
+  border-radius: 16px;
+  box-shadow: inset 0 2px 10px rgba(250, 204, 21, 0.18);
+}
+
+.reward-line {
+  color: #fef08a;
+  text-shadow: 0 2px 0 #020617;
+}
+
+.gem-reward {
+  color: #4ade80;
+}
+
+.mult-reel-track {
+  border: 2.5px solid #020617;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45), 0 3px 0 #020617;
+  height: 30px;
+}
+
+/* Glossy 3D Arcade Buttons on Results & Modals */
+.btn-bonus-2x, .btn-continue, .btn-share, .btn-chest, .btn-promote, .btn-chest-claim {
+  border: 2.5px solid #020617;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22),
+    0 5px 0 #020617;
+}
+
+.btn-bonus-2x:active, .btn-continue:active, .btn-share:active, .btn-chest:active, .btn-promote:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), 0 2px 0 #020617;
+}
+
+/* Royal Midnight Modals (Shop, Powerups, Missions, League, Settings) */
+#modal-backdrop {
+  background: radial-gradient(circle at 50% 40%, rgba(30, 27, 75, 0.8), rgba(2, 6, 23, 0.92));
+  backdrop-filter: blur(7px);
+}
+
+.modal-panel {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 3.5px solid #38bdf8;
+  border-radius: 26px;
+  color: #f8fafc;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 3px #020617,
+    0 20px 44px rgba(0, 0, 0, 0.65);
+}
+
+.modal-header {
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+  padding-bottom: 10px;
+}
+
+.modal-header h2 {
+  color: #fef08a;
+  text-shadow: 0 2.5px 0 #020617;
+  letter-spacing: 0.6px;
+}
+
+.modal-close {
+  background: linear-gradient(180deg, #ef4444, #b91c1c);
+  color: #ffffff;
+  border: 2.5px solid #020617;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #020617;
+}
+
+.modal-desc {
+  color: #cbd5e1;
+}
+
+/* Dark Glass Cards inside Modals */
+.powerup-row, .quest-row, .shop-card, .league-card, .setting-row {
+  background: rgba(2, 6, 23, 0.52);
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  color: #f8fafc;
+}
+
+.powerup-row.active, .quest-row.claimable {
+  background: rgba(22, 163, 74, 0.22);
+  border-color: #4ade80;
+}
+
+.shop-card.equipped, .league-card.current {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: #38bdf8;
+}
+
+.pu-name, .shop-name, .quest-title, .league-title {
+  color: #ffffff;
+  text-shadow: 0 1.5px 0 #020617;
+}
+
+.pu-desc, .shop-desc, .quest-prog-txt, .league-sub {
+  color: #94a3b8;
+}
+
+.shop-tab {
+  background: rgba(2, 6, 23, 0.6);
+  color: #cbd5e1;
+  border: 2px solid #020617;
+  box-shadow: 0 3px 0 #020617;
+}
+
+.shop-tab.active {
+  background: linear-gradient(180deg, #38bdf8, #2563eb);
+  color: #ffffff;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #020617;
+}
+
+.set-bonus-bar {
+  background: rgba(2, 6, 23, 0.6);
+  border: 2px solid rgba(148, 163, 184, 0.28);
+  color: #cbd5e1;
+}
+
+.set-bonus-bar.active {
+  background: rgba(250, 204, 21, 0.2);
+  border-color: #facc15;
+  color: #fef08a;
+}
+
+.pu-btn, .shop-action-btn, .quest-claim-btn {
+  border: 2px solid #020617;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #020617;
+}
+
+.shop-action-btn.equip {
+  background: linear-gradient(180deg, #64748b, #475569);
+  color: #ffffff;
+}
+
+.pu-btn:disabled, .shop-action-btn:disabled, .quest-claim-btn:disabled {
+  background: #334155;
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+.quest-bar {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.settings-stats {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1.5px solid rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+}
+
+.name-input {
+  background: #0f172a;
+  color: #ffffff;
+  border: 2px solid #38bdf8;
+}
+
+.btn-danger {
+  background: linear-gradient(180deg, #dc2626, #991b1b);
+  color: #ffffff;
+  border: 2.5px solid #020617;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28), 0 4px 0 #020617;
+}
+
+/* Timing bar scoreboard frame */
+.timing-bar-wrap {
+  background: linear-gradient(180deg, #1e293b, #0f172a);
+  border: 3px solid #facc15;
+  box-shadow: 0 0 0 2px #020617, 0 10px 26px rgba(0, 0, 0, 0.55);
+}
