@@ -87,6 +87,8 @@ export class GameWorld {
 
   public batter!: BaseballPlayerRig;
   public pitcher!: BaseballPlayerRig;
+  private batterAccentMat!: THREE.MeshStandardMaterial;
+  private pitcherAccentMat!: THREE.MeshStandardMaterial;
   public ball!: THREE.Mesh;
   public ballShadow!: THREE.Mesh;
   public targetRing!: THREE.Mesh;
@@ -317,114 +319,288 @@ export class GameWorld {
     }
   }
 
+  private createJerseyTexture(teamHex: number, numberStr: string, isDark = false): THREE.CanvasTexture {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d')!;
+    const hexStr = '#' + teamHex.toString(16).padStart(6, '0');
+
+    // Base jersey fabric
+    ctx.fillStyle = isDark ? '#1e293b' : '#f8fafc';
+    ctx.fillRect(0, 0, 256, 256);
+
+    // Classic MLB vertical pinstripes
+    ctx.fillStyle = hexStr;
+    ctx.globalAlpha = isDark ? 0.35 : 0.22;
+    for (let x = 8; x < 256; x += 16) {
+      ctx.fillRect(x, 0, 3, 256);
+    }
+    ctx.globalAlpha = 1;
+
+    // Collar & chest trim stripes
+    ctx.fillStyle = hexStr;
+    ctx.fillRect(0, 0, 256, 24);
+    ctx.fillRect(0, 232, 256, 24);
+
+    // Front button placket (left half of UV wrap)
+    ctx.fillStyle = hexStr;
+    ctx.fillRect(124, 24, 8, 208);
+
+    // Bold athletic number on front & back!
+    ctx.font = 'bold 78px "Lilita One", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = isDark ? '#020617' : '#0f172a';
+    ctx.fillStyle = isDark ? '#facc15' : hexStr;
+    // Back number (visible to camera on batter!)
+    ctx.strokeText(numberStr, 64, 128);
+    ctx.fillText(numberStr, 64, 128);
+    // Front chest emblem/number
+    ctx.strokeText(numberStr, 192, 128);
+    ctx.fillText(numberStr, 192, 128);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
   private createBaseballPlayer(color: number, isPitcher: boolean, emissive = 0x000000): BaseballPlayerRig {
-    const mat = new THREE.MeshStandardMaterial({
+    const teamMat = new THREE.MeshStandardMaterial({
       color,
       emissive,
       emissiveIntensity: emissive ? 0.25 : 0,
-      roughness: 0.34,
-      metalness: 0.08,
+      roughness: 0.38,
+      metalness: 0.1,
     });
-    const accentMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xf6c29b, roughness: 0.62 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c1d14, roughness: 0.8 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.65 });
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
+    const eyeDark = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.15 });
+    const jerseyTex = this.createJerseyTexture(color, isPitcher ? '1' : '99', color === 0x1e293b);
+    const jerseyMat = new THREE.MeshStandardMaterial({
+      map: jerseyTex,
+      roughness: 0.55,
+      metalness: 0.05,
+    });
+
+    if (isPitcher) this.pitcherAccentMat = teamMat;
+    else this.batterAccentMat = teamMat;
 
     const root = new THREE.Group();
     const hips = new THREE.Group();
-    hips.position.set(0, 0.88, 0);
+    hips.position.set(0, 0.9, 0);
     root.add(hips);
 
-    // Torso group (rotates independently for realistic hip-shoulder separation!)
+    // Sculpted athletic pelvis / baseball pants shorts
+    const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.25, 0.24, 16), pantsMat);
+    pelvis.position.set(0, 0.02, 0);
+    pelvis.castShadow = true;
+    hips.add(pelvis);
+
     const torsoGroup = new THREE.Group();
     hips.add(torsoGroup);
 
-    const torsoMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.46, 8, 14), mat);
-    torsoMesh.position.set(0, 0.36, 0);
+    // Athletic V-tapered baseball jersey torso (broad shoulders, trim waist!)
+    const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.25, 0.62, 18), jerseyMat);
+    torsoMesh.position.set(0, 0.41, 0);
     torsoMesh.castShadow = true;
     torsoGroup.add(torsoMesh);
 
-    // Jersey belt & chest stripe so torso rotation is super readable!
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.285, 0.285, 0.08, 14), this.sharedMat.shoe);
-    belt.position.set(0, 0.08, 0);
+    // Rounded shoulders & athletic chest contour
+    const shoulders = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.36, 8, 12), teamMat);
+    shoulders.rotation.z = Math.PI / 2;
+    shoulders.position.set(0, 0.63, 0);
+    shoulders.castShadow = true;
+    torsoGroup.add(shoulders);
+
+    // Neck
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.18, 12), skinMat);
+    neck.position.set(0, 0.77, 0);
+    torsoGroup.add(neck);
+
+    // Baseball belt + shiny buckle
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.275, 0.275, 0.09, 16), this.sharedMat.shoe);
+    belt.position.set(0, 0.11, 0);
     torsoGroup.add(belt);
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.06), this.sharedMat.ringGold);
+    buckle.position.set(0, 0.11, 0.26);
+    torsoGroup.add(buckle);
 
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.58), accentMat);
-    stripe.position.set(0, 0.38, 0);
-    torsoGroup.add(stripe);
-
-    // Head group + helmet mount
+    // ===== EXPRESSIVE STYLIZED HEAD & FACE =====
     const headGroup = new THREE.Group();
-    headGroup.position.set(0, 0.92, 0);
+    headGroup.position.set(0, 1.03, 0);
     torsoGroup.add(headGroup);
 
-    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 20, 18), mat);
+    // Slightly oval sculpted head
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 22, 20), skinMat);
+    headMesh.scale.set(0.96, 1.05, 0.98);
     headMesh.castShadow = true;
     headGroup.add(headMesh);
 
+    // Ears
+    for (const side of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), skinMat);
+      ear.scale.set(0.6, 1.0, 0.8);
+      ear.position.set(side * 0.33, -0.02, -0.02);
+      headGroup.add(ear);
+    }
+
+    // Back hair cuff peeking cleanly under cap/helmet
+    const hairBack = new THREE.Mesh(
+      new THREE.SphereGeometry(0.335, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
+      hairMat
+    );
+    hairBack.rotation.x = -0.35;
+    hairBack.position.set(0, 0.02, -0.04);
+    headGroup.add(hairBack);
+
+    // Cute rounded nose
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), skinMat);
+    nose.position.set(0, -0.03, 0.33);
+    headGroup.add(nose);
+
+    // Expressive cartoon eyes + glossy catchlights + determined eyebrows!
+    for (const side of [-1, 1]) {
+      const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.072, 12, 12), whiteMat);
+      sclera.scale.set(0.95, 1.15, 0.55);
+      sclera.position.set(side * 0.125, 0.04, 0.29);
+      headGroup.add(sclera);
+
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.044, 10, 10), eyeDark);
+      pupil.scale.set(0.95, 1.1, 0.55);
+      pupil.position.set(side * 0.125, 0.04, 0.322);
+      headGroup.add(pupil);
+
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 8), whiteMat);
+      shine.position.set(side * 0.14, 0.065, 0.342);
+      headGroup.add(shine);
+
+      // Determined athletic brow
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.032, 0.04), hairMat);
+      brow.position.set(side * 0.125, 0.14, 0.31);
+      brow.rotation.z = -side * 0.18;
+      headGroup.add(brow);
+
+      // MLB eye-black grease strips on batter!
+      if (!isPitcher) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.024, 0.02), eyeDark);
+        stripe.position.set(side * 0.13, -0.035, 0.315);
+        headGroup.add(stripe);
+      }
+    }
+
+    // Confident grin
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.016, 8, 14, Math.PI), whiteMat);
+    mouth.rotation.z = Math.PI;
+    mouth.position.set(0, -0.11, 0.305);
+    headGroup.add(mouth);
+
     const helmetMount = new THREE.Group();
+    helmetMount.position.set(0, 0.04, 0);
     headGroup.add(helmetMount);
 
-    // Articulated Arm builder (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
+    // ===== ARTICULATED ARMS (Raglan sleeve + skin forearm + wristband + glove!) =====
     const buildArm = (side: -1 | 1): ArmRig => {
       const shoulder = new THREE.Group();
-      shoulder.position.set(side * 0.37, 0.58, 0);
+      shoulder.position.set(side * 0.39, 0.62, 0);
       torsoGroup.add(shoulder);
 
-      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.28, 6, 10), mat);
-      upper.position.set(0, -0.18, 0);
-      upper.castShadow = true;
-      shoulder.add(upper);
+      // Jersey short sleeve
+      const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.105, 0.28, 12), teamMat);
+      sleeve.position.set(0, -0.15, 0);
+      sleeve.castShadow = true;
+      shoulder.add(sleeve);
 
       const elbow = new THREE.Group();
-      elbow.position.set(0, -0.36, 0);
+      elbow.position.set(0, -0.32, 0);
       shoulder.add(elbow);
 
-      const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.26, 6, 10), mat);
-      forearm.position.set(0, -0.17, 0);
+      // Muscular forearm (skin tone!)
+      const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.22, 6, 10), skinMat);
+      forearm.position.set(0, -0.15, 0);
       forearm.castShadow = true;
       elbow.add(forearm);
+
+      // Athletic wristband
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.094, 0.094, 0.075, 12), teamMat);
+      band.position.set(0, -0.27, 0);
+      elbow.add(band);
 
       const hand = new THREE.Group();
       hand.position.set(0, -0.34, 0);
       elbow.add(hand);
 
-      // Pitcher wears a big brown leather glove on left hand!
       if (isPitcher && side === -1) {
-        const glove = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), this.sharedMat.glove);
-        glove.scale.set(1.15, 1.25, 0.75);
-        glove.castShadow = true;
-        hand.add(glove);
+        // Detailed sculpted leather baseball mitt (palm + curved web + thumb!)
+        const palm = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), this.sharedMat.glove);
+        palm.scale.set(1.15, 1.3, 0.55);
+        palm.castShadow = true;
+        hand.add(palm);
+
+        const pocket = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), this.sharedMat.shoe);
+        pocket.scale.set(1.0, 1.1, 0.35);
+        pocket.position.set(0, 0.02, 0.07);
+        hand.add(pocket);
+
+        const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.12, 6, 8), this.sharedMat.glove);
+        thumb.position.set(0.16, 0.04, 0.04);
+        thumb.rotation.z = -0.5;
+        hand.add(thumb);
       } else {
-        const fist = new THREE.Mesh(new THREE.SphereGeometry(0.105, 10, 10), accentMat);
-        fist.castShadow = true;
-        hand.add(fist);
+        // Pro batting glove (team-accented back + white palm + thumb)
+        const gloveHand = new THREE.Mesh(new THREE.SphereGeometry(0.098, 12, 10), isPitcher ? skinMat : whiteMat);
+        gloveHand.scale.set(0.95, 1.05, 0.85);
+        gloveHand.castShadow = true;
+        hand.add(gloveHand);
+
+        if (!isPitcher) {
+          const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 10), teamMat);
+          cuff.position.set(0, 0.06, 0);
+          hand.add(cuff);
+        }
       }
 
       return { shoulder, elbow, hand };
     };
 
-    // Articulated Leg builder (Hip -> Thigh -> Knee -> Shin -> Cleat)
+    // ===== ARTICULATED LEGS (Baseball pants + striped stirrup socks + two-tone cleats!) =====
     const buildLeg = (side: -1 | 1): LegRig => {
       const hip = new THREE.Group();
-      hip.position.set(side * 0.16, 0, 0);
+      hip.position.set(side * 0.16, -0.02, 0);
       hips.add(hip);
 
-      const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.125, 0.3, 6, 10), mat);
-      thigh.position.set(0, -0.2, 0);
+      const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.125, 0.28, 8, 12), pantsMat);
+      thigh.position.set(0, -0.19, 0);
       thigh.castShadow = true;
       hip.add(thigh);
 
       const knee = new THREE.Group();
-      knee.position.set(0, -0.42, 0);
+      knee.position.set(0, -0.4, 0);
       hip.add(knee);
 
-      const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.3, 6, 10), accentMat);
-      shin.position.set(0, -0.2, 0);
-      shin.castShadow = true;
-      knee.add(shin);
+      // High team-colored baseball sock + white stripe
+      const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.088, 0.36, 12), teamMat);
+      sock.position.set(0, -0.19, 0);
+      sock.castShadow = true;
+      knee.add(sock);
 
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.36), this.sharedMat.shoe);
-      shoe.position.set(0, -0.4, 0.08);
-      shoe.castShadow = true;
-      knee.add(shoe);
+      const sockStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.108, 0.104, 0.06, 12), whiteMat);
+      sockStripe.position.set(0, -0.08, 0);
+      knee.add(sockStripe);
+
+      // Sculpted two-tone baseball cleat (rounded upper + sole!)
+      const cleatUpper = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.18, 8, 10), this.sharedMat.shoe);
+      cleatUpper.rotation.x = Math.PI / 2;
+      cleatUpper.position.set(0, -0.39, 0.07);
+      cleatUpper.castShadow = true;
+      knee.add(cleatUpper);
+
+      const cleatSole = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.045, 0.36), whiteMat);
+      cleatSole.position.set(0, -0.455, 0.07);
+      knee.add(cleatSole);
 
       return { hip, knee };
     };
@@ -445,7 +621,7 @@ export class GameWorld {
       leftLeg,
       rightLeg,
       helmetMount,
-      material: mat,
+      material: teamMat,
     };
   }
 
@@ -505,27 +681,35 @@ export class GameWorld {
 
     // Standard dome base for cap / batting / viking / visor / mohawk
     const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(0.415, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.58),
+      new THREE.SphereGeometry(0.37, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.56),
       primary
     );
-    dome.position.y = 0.04;
+    dome.position.y = 0.02;
     dome.castShadow = true;
     g.add(dome);
 
     if (shape === 'cap' || shape === 'batting') {
-      // Brim pointing forward (+Z)
-      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.055, 0.36), primary);
-      brim.position.set(0, 0.12, 0.36);
+      // Smooth curved baseball cap visor (cylinder slice, no blocky plank!)
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.37, 0.045, 16, 1, false, -Math.PI * 0.4, Math.PI * 0.8),
+        primary
+      );
+      brim.scale.set(1.0, 1.0, 1.35);
+      brim.position.set(0, 0.06, 0.16);
       g.add(brim);
 
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.12), secondary);
-      stripe.position.set(0, 0.25, 0.35);
-      g.add(stripe);
+      // Top cap button + front embroidered team patch
+      const btn = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), secondary);
+      btn.position.set(0, 0.39, 0);
+      g.add(btn);
+
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(0.085, 14), secondary);
+      patch.position.set(0, 0.19, 0.355);
+      g.add(patch);
 
       if (shape === 'batting') {
-        // Ear flap on left side facing pitcher
-        const flap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.26, 0.28), primary);
-        flap.position.set(-0.39, -0.05, 0.05);
+        const flap = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.22, 12, 1, true, Math.PI * 0.25, Math.PI * 0.45), primary);
+        flap.position.set(0, -0.05, 0);
         g.add(flap);
       }
     } else if (shape === 'viking') {
@@ -687,6 +871,8 @@ export class GameWorld {
       this.pitcher.material.color.setHex(boss.color);
       this.pitcher.material.emissive.setHex(boss.hatColor);
       this.pitcher.material.emissiveIntensity = 0.28;
+      (this.pitcher.torsoMesh.material as THREE.MeshStandardMaterial).map = this.createJerseyTexture(boss.color, '00', true);
+      (this.pitcher.torsoMesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
       this.pitcher.root.scale.setScalar(1.16);
       const hat = this.buildHelmetMesh({
         id: 'boss_hat',
@@ -709,6 +895,8 @@ export class GameWorld {
       this.pitcher.material.color.setHex(0xef233c);
       this.pitcher.material.emissive.setHex(0x000000);
       this.pitcher.material.emissiveIntensity = 0;
+      (this.pitcher.torsoMesh.material as THREE.MeshStandardMaterial).map = this.createJerseyTexture(0xef233c, '1', false);
+      (this.pitcher.torsoMesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
       this.pitcher.root.scale.setScalar(1.0);
       const cap = this.buildHelmetMesh({
         id: 'pitcher_cap',
@@ -738,6 +926,11 @@ export class GameWorld {
     this.batter.material.color.setHex(skin.primaryColor);
     this.batter.material.emissive.setHex(skin.emissive || 0x000000);
     this.batter.material.emissiveIntensity = skin.emissive ? 0.3 : 0;
+
+    // Re-skin batter's pinstripe baseball jersey to match selected team uniform!
+    const jerseyMat = this.batter.torsoMesh.material as THREE.MeshStandardMaterial;
+    jerseyMat.map = this.createJerseyTexture(skin.primaryColor, '99', skin.id === 'skin_shadow');
+    jerseyMat.needsUpdate = true;
 
     // Subtle muscle scaling
     const muscleBoost = 1 + Math.min(0.4, (save.muscleLevel - 1) * 0.018);
