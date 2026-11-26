@@ -89,6 +89,7 @@ export interface Mission {
 }
 
 export interface GameSave {
+  playerId: string;
   playerName: string;
   coins: number;
   gems: number;
@@ -359,8 +360,18 @@ export function createInitialMissions(): Mission[] {
   ];
 }
 
+function generatePlayerId(): string {
+  try {
+    if (crypto && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+    }
+  } catch { /* fallback */ }
+  return 'p_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+}
+
 export function createDefaultSave(): GameSave {
   return {
+    playerId: generatePlayerId(),
     playerName: 'Slugger',
     coins: 45,
     gems: 15,
@@ -402,6 +413,7 @@ export function loadSave(): GameSave {
     return {
       ...def,
       ...parsed,
+      playerId: typeof parsed.playerId === 'string' && parsed.playerId ? parsed.playerId : def.playerId,
       ownedItems: Array.isArray(parsed.ownedItems) ? parsed.ownedItems : def.ownedItems,
       brokenWalls: Array.isArray(parsed.brokenWalls) ? parsed.brokenWalls : [],
       wallDamage: parsed.wallDamage && typeof parsed.wallDamage === 'object' ? parsed.wallDamage : {},

@@ -25,6 +25,8 @@ import {
 import { BaseballGame, GamePhase, RunResult } from './game';
 import { sound } from './audio';
 import { Lang, setLang, t } from './i18n';
+import { fetchLeaderboard, submitLeaderboardScore } from './leaderboard';
+import { LEAGUES } from './state';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -104,8 +106,14 @@ const modalBackdrop = $('modal-backdrop');
 const modalPowerups = $('modal-powerups');
 const modalShop = $('modal-shop');
 const modalLeague = $('modal-league');
+const modalLeaderboard = $('modal-leaderboard');
 const modalQuests = $('modal-quests');
 const modalSettings = $('modal-settings');
+const lbNameInput = $<HTMLInputElement>('lb-name-input');
+const lbSaveBtn = $<HTMLButtonElement>('lb-save-btn');
+const lbRefreshBtn = $<HTMLButtonElement>('lb-refresh-btn');
+const lbYourRank = $('lb-your-rank');
+const lbList = $('lb-list');
 const powerupListEl = $('powerup-list');
 const setBonusBarEl = $('set-bonus-bar');
 const shopGridEl = $('shop-grid');
@@ -126,7 +134,10 @@ function applyStaticLabels(): void {
   set('.tap-sub-text', t('tapSub'));
   set('.timing-label', t('tapSwing'));
   set('.powerup-btn .side-tag', t('boost'));
+  set('.ranks-btn .side-tag', t('ranksTag'));
   set('.league-btn .side-tag', t('league'));
+  set('#modal-leaderboard h2', t('leaderboardTitle'));
+  set('#lb-save-btn', t('saveNameSync'));
   set('#upg-bat .card-title', t('bat'));
   set('#upg-muscle .card-title', t('muscle'));
   set('#upg-income .card-title', t('income'));
@@ -398,6 +409,11 @@ const game = new BaseballGame(canvas, save, rival, {
 
     bumpPill(coinPill);
     if (res.gemsEarned > 0) bumpPill(gemPill);
+
+    // Auto-submit to global leaderboard whenever a new personal best is set!
+    if (res.isNewRecord && save.bestDistance >= 10) {
+      submitLeaderboardScore(save).catch(() => {});
+    }
   },
   onStateChanged: updateHUD,
 });
@@ -722,7 +738,9 @@ btnContinue.addEventListener('click', () => {
 
 // ===== MODAL HELPERS =====
 function openModal(panel: HTMLElement): void {
-  [modalPowerups, modalShop, modalLeague, modalQuests, modalSettings].forEach((p) => p.classList.add('hidden'));
+  [modalPowerups, modalShop, modalLeague, modalLeaderboard, modalQuests, modalSettings].forEach((p) =>
+    p.classList.add('hidden')
+  );
   panel.classList.remove('hidden');
   modalBackdrop.classList.remove('hidden');
 }
@@ -973,6 +991,69 @@ function renderQuestsModal(): void {
 $('btn-quests').addEventListener('click', () => {
   renderQuestsModal();
   openModal(modalQuests);
+});
+
+// ===== GLOBAL LEADERBOARD MODAL =====
+async function renderLeaderboardModal(forceSubmit = false): Promise<void> {
+  lbNameInput.value = save.playerName || 'Slugger';
+  lbList.innerHTML = `<div class="lb-empty">${t('loadingRanks')}</div>`;
+  lbYourRank.textContent = `${t('yourRank')}: ...`;
+
+  try {
+    let data = forceSubmit && save.bestDistance >= 1 ? await submitLeaderboardScore(save) : null;
+    if (!data) {
+      // Also auto-sync if player has a record!
+      if (save.bestDistance >= 10) {
+        data = await submitLeaderboardScore(save);
+      }
+      if (!data) data = await fetchLeaderboard(save.playerId);
+    }
+
+    lbYourRank.textContent = data.yourRank
+      ? `${t('yourRank')}: #${data.yourRank} / ${data.totalPlayers} (${save.bestDistance}m)`
+      : `${t('yourRank')}: — (${save.bestDistance}m)`;
+
+    if (!data.entries.length) {
+      lbList.innerHTML = `<div class="lb-empty">${t('noScoresYet')}</div>`;
+      return;
+    }
+
+    lbList.innerHTML = data.entries
+      .map((entry, idx) => {
+        const rank = idx + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+        const leagueEmoji = (LEAGUES[entry.leagueTier] || LEAGUES[0]).emoji;
+        const isMe = entry.playerId === save.playerId;
+        const cls = `lb-row${isMe ? ' me' : ''}${rank === 1 ? ' top1' : ''}`;
+        return `
+          <div class="${cls}">
+            <div class="lb-rank">${medal}</div>
+            <div class="lb-name">${leagueEmoji} ${entry.name}${isMe ? ' (YOU)' : ''}</div>
+            <div class="lb-dist">${entry.distance}m</div>
+          </div>
+        `;
+      })
+      .join('');
+  } catch {
+    lbYourRank.textContent = `${t('yourRank')}: —`;
+    lbList.innerHTML = `<div class="lb-empty">${t('offlineRanks')}</div>`;
+  }
+}
+
+$('btn-leaderboard').addEventListener('click', () => {
+  openModal(modalLeaderboard);
+  renderLeaderboardModal(false);
+});
+
+lbSaveBtn.addEventListener('click', () => {
+  save.playerName = lbNameInput.value.trim().slice(0, 14) || 'Slugger';
+  saveGame(save);
+  sound.playUpgrade();
+  renderLeaderboardModal(true);
+});
+
+lbRefreshBtn.addEventListener('click', () => {
+  renderLeaderboardModal(false);
 });
 
 // ===== SETTINGS MODAL =====

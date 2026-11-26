@@ -59,6 +59,10 @@
         <span class="side-tag">BOOST</span>
         <span class="badge-dot hidden" id="powerup-active-dot"></span>
       </button>
+      <button class="side-btn ranks-btn" id="btn-leaderboard" aria-label="Leaderboard" title="Global Leaderboard">
+        <span class="side-emoji">🌍</span>
+        <span class="side-tag">RANKS</span>
+      </button>
     </div>
 
     <!-- RIGHT SIDE CONTROLS -->
@@ -275,6 +279,21 @@
         </div>
         <p class="modal-desc">Complete infinite challenges to earn Gems!</p>
         <div class="quest-list" id="quest-list"></div>
+      </div>
+
+      <!-- GLOBAL LEADERBOARD MODAL -->
+      <div class="modal-panel hidden" id="modal-leaderboard">
+        <div class="modal-header">
+          <h2>🌍 GLOBAL RANKS</h2>
+          <button class="modal-close" data-close>✕</button>
+        </div>
+        <div class="lb-name-bar">
+          <input type="text" id="lb-name-input" maxlength="14" class="name-input lb-input" placeholder="Your Name" />
+          <button class="lb-save-btn" id="lb-save-btn">SAVE</button>
+          <button class="lb-refresh-btn" id="lb-refresh-btn" title="Refresh">🔄</button>
+        </div>
+        <div class="lb-your-rank" id="lb-your-rank">YOUR RANK: —</div>
+        <div class="lb-list" id="lb-list"></div>
       </div>
 
       <!-- SETTINGS MODAL -->

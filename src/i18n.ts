@@ -78,6 +78,13 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     loadoutActive: 'Active Loadout:',
     unlock2ndSlot: 'Unlock 2nd slot at Major League!',
     proLoadout: '2-Slot Pro Loadout',
+    ranksTag: 'RANKS',
+    leaderboardTitle: '🌍 GLOBAL RANKS',
+    yourRank: 'YOUR RANK',
+    loadingRanks: 'Loading live scores...',
+    noScoresYet: 'No scores yet — hit a ball to claim #1!',
+    offlineRanks: 'Offline — connect to view global ranks.',
+    saveNameSync: 'SAVE',
   },
   es: {
     best: 'RÉCORD:',
@@ -147,6 +154,13 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     loadoutActive: 'Activos:',
     unlock2ndSlot: '¡Desbloquea el 2º espacio en Grandes Ligas!',
     proLoadout: '2 Espacios Pro',
+    ranksTag: 'TOP',
+    leaderboardTitle: '🌍 RANKING GLOBAL',
+    yourRank: 'TU PUESTO',
+    loadingRanks: 'Cargando puntuaciones...',
+    noScoresYet: '¡Sin récords aún — batea para ser #1!',
+    offlineRanks: 'Sin conexión — conéctate para ver el ranking.',
+    saveNameSync: 'GUARDAR',
   },
 };
 
