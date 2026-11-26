@@ -2093,6 +2093,44 @@ html, body {
   font-size: 0.9rem;
 }
 
+/* Compact sleek stat strip + clean staged Result Card spacing */
+.result-card {
+  padding: 20px 18px 18px;
+}
+
+.result-stats-grid {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: rgba(2, 6, 23, 0.52);
+  border: 1.5px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  padding: 8px 10px;
+  gap: 0;
+  margin-bottom: 12px;
+}
+
+.result-stat {
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  flex: 1;
+}
+
+.result-stat + .result-stat {
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.result-reward-box {
+  margin-bottom: 14px;
+}
+
+.btn-continue:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
 .un-error {
   color: #fca5a5;
   background: rgba(220, 38, 38, 0.2);

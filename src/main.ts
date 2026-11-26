@@ -187,6 +187,38 @@ let reelRaf = 0;
 let reelPos = 50; // 0..100
 let reelDir = 1;
 
+function syncResultStepUI(): void {
+  // Clean 1-step-at-a-time flow: Chest -> Multiplier Reel -> Next At-Bat!
+  if (chestsRemaining > 0) {
+    btnOpenChest.classList.remove('hidden');
+    btnOpenChest.textContent =
+      chestsRemaining > 1
+        ? `${t('openChest')} (${chestsRemaining})`
+        : t('openChest');
+    multReelWrap.classList.add('hidden');
+    btnContinue.classList.add('hidden');
+    btnContinue.disabled = true;
+    cancelAnimationFrame(reelRaf);
+    return;
+  }
+
+  btnOpenChest.classList.add('hidden');
+
+  if (!bonusClaimed) {
+    multReelWrap.classList.remove('hidden');
+    btnBonus2x.disabled = false;
+    btnBonus2x.innerHTML = `<span>${t('stopReel')}</span>`;
+    btnContinue.classList.add('hidden');
+    btnContinue.disabled = true;
+    startMultiplierReel();
+    return;
+  }
+
+  // All rewards claimed -> reveal NEXT AT-BAT!
+  btnContinue.classList.remove('hidden');
+  btnContinue.disabled = false;
+}
+
 function startMultiplierReel(): void {
   cancelAnimationFrame(reelRaf);
   reelPos = 10;
@@ -399,22 +431,10 @@ const game = new BaseballGame(canvas, save, rival, {
       resultGemLine.classList.add('hidden');
     }
 
-    // Mystery Chest button
+    // Clean staged reward flow: Chest -> Reel -> Next At-Bat
     chestLootEl.classList.add('hidden');
     chestLootEl.textContent = '';
-    if (chestsRemaining > 0) {
-      btnOpenChest.classList.remove('hidden');
-      btnOpenChest.textContent =
-        chestsRemaining > 1 ? `🎁 OPEN MYSTERY CHEST (${chestsRemaining})` : '🎁 OPEN MYSTERY CHEST!';
-    } else {
-      btnOpenChest.classList.add('hidden');
-    }
-
-    // 3x Multiplier Reel
-    multReelWrap.classList.remove('hidden');
-    btnBonus2x.disabled = false;
-    btnBonus2x.innerHTML = `<span>${t('stopReel')}</span>`;
-    startMultiplierReel();
+    syncResultStepUI();
 
     bumpPill(coinPill);
     if (res.gemsEarned > 0) bumpPill(gemPill);
@@ -494,8 +514,13 @@ window.addEventListener('keydown', (e) => {
   if (!modalBackdrop.classList.contains('hidden')) return;
   if (e.code === 'Space') {
     e.preventDefault();
-    if (game.phase === 'RESULT') game.resetToIdle(true);
-    else game.handlePrimaryTap();
+    if (game.phase === 'RESULT') {
+      if (!btnContinue.disabled && !btnContinue.classList.contains('hidden')) {
+        game.resetToIdle(true);
+      }
+    } else {
+      game.handlePrimaryTap();
+    }
   } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
     game.setSteer(-1);
   } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
@@ -573,6 +598,7 @@ btnBonus2x.addEventListener('click', () => {
   btnBonus2x.disabled = true;
   btnBonus2x.innerHTML = `<span>${mult >= 3 ? '🔥 JACKPOT' : '✓'} ${mult}× CLAIMED! (+${formatNumber(extraCoins)})</span>`;
   updateHUD();
+  syncResultStepUI();
 });
 
 // ===== INTERACTIVE 3-TAP MYSTERY CHEST CEREMONY =====
@@ -702,11 +728,7 @@ chestBoxWrap.addEventListener('click', () => {
 
 btnChestClaim.addEventListener('click', () => {
   chestOverlay.classList.add('hidden');
-  if (chestsRemaining > 0) {
-    btnOpenChest.textContent = `🎁 OPEN NEXT CHEST (${chestsRemaining})`;
-  } else {
-    btnOpenChest.classList.add('hidden');
-  }
+  syncResultStepUI();
 });
 
 btnOpenChest.addEventListener('click', () => {
@@ -716,6 +738,7 @@ btnOpenChest.addEventListener('click', () => {
 });
 
 btnContinue.addEventListener('click', () => {
+  if (btnContinue.disabled || chestsRemaining > 0 || !bonusClaimed) return;
   cancelAnimationFrame(reelRaf);
   game.resetToIdle(true);
 });
