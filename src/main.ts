@@ -99,7 +99,6 @@ const btnChestClaim = $<HTMLButtonElement>('btn-chest-claim');
 const multReelWrap = $('mult-reel-wrap');
 const multReelNeedle = $('mult-reel-needle');
 const btnBonus2x = $<HTMLButtonElement>('btn-bonus-2x');
-const btnShare = $<HTMLButtonElement>('btn-share');
 const btnContinue = $<HTMLButtonElement>('btn-continue');
 
 // Modals
@@ -153,7 +152,6 @@ function applyStaticLabels(): void {
   set('#upg-muscle .card-title', t('muscle'));
   set('#upg-income .card-title', t('income'));
   set('#result-new-record', t('newRecord'));
-  set('#btn-share', t('challenge'));
   set('#btn-continue', t('nextAtBat'));
   set('#btn-chest-claim', t('awesomeClaim'));
   set('#modal-powerups h2', t('powerupsTitle'));
@@ -715,31 +713,6 @@ btnOpenChest.addEventListener('click', () => {
   if (chestsRemaining <= 0) return;
   chestsRemaining -= 1;
   openChestCeremony();
-});
-
-btnShare.addEventListener('click', async () => {
-  const dist = Math.max(save.bestDistance, lastRunResult?.distance || 0);
-  const name = encodeURIComponent(save.playerName || 'Slugger');
-  const baseUrl = `${window.location.origin}${window.location.pathname}`;
-  const shareUrl = `${baseUrl}?rival=${name}&dist=${dist}`;
-  const shareText = `⚾ I crushed a ${dist}m home run in MEGA BAT RUSH! Can you beat my 3D flag?`;
-
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: 'Mega Bat Rush Challenge', text: shareText, url: shareUrl });
-      return;
-    }
-  } catch {
-    // fallback to clipboard
-  }
-
-  try {
-    await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-    btnShare.textContent = '✓ LINK COPIED!';
-    setTimeout(() => { btnShare.textContent = '⚔️ CHALLENGE'; }, 1800);
-  } catch {
-    prompt('Copy your friend challenge link:', shareUrl);
-  }
 });
 
 btnContinue.addEventListener('click', () => {
