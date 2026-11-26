@@ -1039,3 +1039,28 @@ $('btn-reset-save').addEventListener('click', () => {
 applyStaticLabels();
 updateHUD();
 handlePhaseChange('IDLE');
+
+// ===== PWA SERVICE WORKER & INSTALL PROMPT =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+let deferredInstallPrompt: (Event & { prompt: () => Promise<void> }) | null = null;
+const btnInstallPwa = document.getElementById('btn-install-pwa') as HTMLButtonElement | null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e as Event & { prompt: () => Promise<void> };
+  if (btnInstallPwa) btnInstallPwa.classList.remove('hidden');
+});
+
+if (btnInstallPwa) {
+  btnInstallPwa.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    await deferredInstallPrompt.prompt();
+    deferredInstallPrompt = null;
+    btnInstallPwa.classList.add('hidden');
+  });
+}
