@@ -371,8 +371,8 @@ function generatePlayerId(): string {
 }
 
 export function generateRandomUsername(): string {
-  const adj = ['Turbo', 'Mega', 'Neon', 'Blaze', 'Sonic', 'Hyper', 'Gold', 'Cosmic', 'Flash', 'Titan', 'Nitro', 'Ace'];
-  const noun = ['Bat', 'Slugger', 'Homer', 'Crusher', 'Babe', 'Swing', 'Rocket', 'King', 'Star', 'Hitter', 'Bolt', 'Pro'];
+  const adj = ['Turbo', 'Mega', 'Neon', 'Blaze', 'Sonic', 'Super', 'Gold', 'Cosmic', 'Flash', 'Titan', 'Nitro', 'Swift'];
+  const noun = ['Slugger', 'Homer', 'Batter', 'Striker', 'Rocket', 'Comet', 'Champ', 'Hero', 'Eagle', 'Tiger', 'Falcon', 'Spark'];
   const a = adj[Math.floor(Math.random() * adj.length)];
   const n = noun[Math.floor(Math.random() * noun.length)];
   const num = Math.floor(10 + Math.random() * 89);
