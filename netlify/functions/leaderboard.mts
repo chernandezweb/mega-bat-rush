@@ -10,7 +10,7 @@ interface LeaderboardEntry {
 }
 
 const STORE_NAME = 'mega-bat-leaderboard';
-const BOARD_KEY = 'global-top-v1';
+const BOARD_KEY = 'global-top-v2';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
