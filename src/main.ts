@@ -5,6 +5,7 @@ import {
   formatNumber,
   GameSave,
   GEAR_SETS,
+  generateRandomUsername,
   getActiveGearSet,
   getBatTierName,
   getCurrentLeague,
@@ -106,12 +107,19 @@ const modalBackdrop = $('modal-backdrop');
 const modalPowerups = $('modal-powerups');
 const modalShop = $('modal-shop');
 const modalLeague = $('modal-league');
+const modalUsername = $('modal-username');
 const modalLeaderboard = $('modal-leaderboard');
 const modalQuests = $('modal-quests');
 const modalSettings = $('modal-settings');
+const unInput = $<HTMLInputElement>('un-input');
+const unRandomBtn = $<HTMLButtonElement>('un-random-btn');
+const unConfirmBtn = $<HTMLButtonElement>('un-confirm-btn');
+const unError = $('un-error');
 const lbNameInput = $<HTMLInputElement>('lb-name-input');
+const lbRandomBtn = $<HTMLButtonElement>('lb-random-btn');
 const lbSaveBtn = $<HTMLButtonElement>('lb-save-btn');
 const lbRefreshBtn = $<HTMLButtonElement>('lb-refresh-btn');
+const lbError = $('lb-error');
 const lbYourRank = $('lb-your-rank');
 const lbList = $('lb-list');
 const powerupListEl = $('powerup-list');
@@ -138,6 +146,9 @@ function applyStaticLabels(): void {
   set('.league-btn .side-tag', t('league'));
   set('#modal-leaderboard h2', t('leaderboardTitle'));
   set('#lb-save-btn', t('saveNameSync'));
+  set('#un-title', t('pickNameTitle'));
+  set('#un-desc', t('pickNameDesc'));
+  set('#un-confirm-btn', t('pickNameBtn'));
   set('#upg-bat .card-title', t('bat'));
   set('#upg-muscle .card-title', t('muscle'));
   set('#upg-income .card-title', t('income'));
@@ -738,7 +749,7 @@ btnContinue.addEventListener('click', () => {
 
 // ===== MODAL HELPERS =====
 function openModal(panel: HTMLElement): void {
-  [modalPowerups, modalShop, modalLeague, modalLeaderboard, modalQuests, modalSettings].forEach((p) =>
+  [modalPowerups, modalShop, modalLeague, modalUsername, modalLeaderboard, modalQuests, modalSettings].forEach((p) =>
     p.classList.add('hidden')
   );
   panel.classList.remove('hidden');
@@ -746,6 +757,8 @@ function openModal(panel: HTMLElement): void {
 }
 
 function closeModals(): void {
+  // Don't allow dismissing the first-time username modal until a name is picked!
+  if (!modalUsername.classList.contains('hidden') && !save.nameConfirmed) return;
   modalBackdrop.classList.add('hidden');
 }
 
@@ -993,18 +1006,79 @@ $('btn-quests').addEventListener('click', () => {
   openModal(modalQuests);
 });
 
+// ===== FIRST-TIME USERNAME PICKER =====
+function promptUsernameIfNeeded(): void {
+  if (save.nameConfirmed && save.playerName && save.playerName !== 'Slugger') return;
+  unInput.value = generateRandomUsername();
+  unError.classList.add('hidden');
+  openModal(modalUsername);
+}
+
+unRandomBtn.addEventListener('click', () => {
+  unInput.value = generateRandomUsername();
+  unError.classList.add('hidden');
+  sound.playCoin();
+});
+
+unConfirmBtn.addEventListener('click', async () => {
+  const candidate = unInput.value.trim().slice(0, 14);
+  if (candidate.length < 2) {
+    unError.textContent = t('nameTooShort');
+    unError.classList.remove('hidden');
+    return;
+  }
+  unConfirmBtn.disabled = true;
+  unError.classList.add('hidden');
+
+  const prevName = save.playerName;
+  save.playerName = candidate;
+  const res = await submitLeaderboardScore(save, true);
+  unConfirmBtn.disabled = false;
+
+  if (res.error === 'NAME_TAKEN') {
+    save.playerName = prevName;
+    unError.textContent = t('nameTaken');
+    unError.classList.remove('hidden');
+    sound.playMiss();
+    return;
+  }
+
+  // Accepted (or offline fallback — save locally so they can play right away!)
+  save.nameConfirmed = true;
+  saveGame(save);
+  sound.playUpgrade();
+  modalBackdrop.classList.add('hidden');
+});
+
 // ===== GLOBAL LEADERBOARD MODAL =====
 async function renderLeaderboardModal(forceSubmit = false): Promise<void> {
-  lbNameInput.value = save.playerName || 'Slugger';
+  lbNameInput.value = save.playerName || '';
+  lbError.classList.add('hidden');
   lbList.innerHTML = `<div class="lb-empty">${t('loadingRanks')}</div>`;
   lbYourRank.textContent = `${t('yourRank')}: ...`;
 
   try {
-    let data = forceSubmit && save.bestDistance >= 1 ? await submitLeaderboardScore(save) : null;
+    let data = null;
+    if (forceSubmit) {
+      const sub = await submitLeaderboardScore(save, true);
+      if (sub.error === 'NAME_TAKEN') {
+        lbError.textContent = t('nameTaken');
+        lbError.classList.remove('hidden');
+        sound.playMiss();
+      } else if (sub.error === 'INVALID_NAME') {
+        lbError.textContent = t('nameTooShort');
+        lbError.classList.remove('hidden');
+      } else if (sub.data) {
+        data = sub.data;
+        save.nameConfirmed = true;
+        saveGame(save);
+      }
+    }
+
     if (!data) {
-      // Also auto-sync if player has a record!
-      if (save.bestDistance >= 10) {
-        data = await submitLeaderboardScore(save);
+      if (save.bestDistance >= 10 && save.nameConfirmed) {
+        const sub = await submitLeaderboardScore(save, false);
+        if (sub.data) data = sub.data;
       }
       if (!data) data = await fetchLeaderboard(save.playerId);
     }
@@ -1045,11 +1119,28 @@ $('btn-leaderboard').addEventListener('click', () => {
   renderLeaderboardModal(false);
 });
 
-lbSaveBtn.addEventListener('click', () => {
-  save.playerName = lbNameInput.value.trim().slice(0, 14) || 'Slugger';
-  saveGame(save);
-  sound.playUpgrade();
-  renderLeaderboardModal(true);
+lbRandomBtn.addEventListener('click', () => {
+  lbNameInput.value = generateRandomUsername();
+  lbError.classList.add('hidden');
+  sound.playCoin();
+});
+
+lbSaveBtn.addEventListener('click', async () => {
+  const candidate = lbNameInput.value.trim().slice(0, 14);
+  if (candidate.length < 2) {
+    lbError.textContent = t('nameTooShort');
+    lbError.classList.remove('hidden');
+    return;
+  }
+  const prev = save.playerName;
+  save.playerName = candidate;
+  await renderLeaderboardModal(true);
+  if (!lbError.classList.contains('hidden')) {
+    save.playerName = prev;
+  } else {
+    saveGame(save);
+    sound.playUpgrade();
+  }
 });
 
 lbRefreshBtn.addEventListener('click', () => {
@@ -1120,6 +1211,7 @@ $('btn-reset-save').addEventListener('click', () => {
 applyStaticLabels();
 updateHUD();
 handlePhaseChange('IDLE');
+promptUsernameIfNeeded();
 
 // ===== PWA SERVICE WORKER & INSTALL PROMPT =====
 if ('serviceWorker' in navigator) {

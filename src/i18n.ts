@@ -85,6 +85,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     noScoresYet: 'No scores yet — hit a ball to claim #1!',
     offlineRanks: 'Offline — connect to view global ranks.',
     saveNameSync: 'SAVE',
+    pickNameTitle: '⚾ CHOOSE YOUR NAME',
+    pickNameDesc: 'Pick a unique username for the Global Leaderboard (or roll a random one!):',
+    pickNameBtn: 'LET\'S PLAY!',
+    nameTaken: '❌ That name is already taken — try another or tap 🎲!',
+    nameTooShort: 'Name must be at least 2 characters.',
   },
   es: {
     best: 'RÉCORD:',
@@ -161,6 +166,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     noScoresYet: '¡Sin récords aún — batea para ser #1!',
     offlineRanks: 'Sin conexión — conéctate para ver el ranking.',
     saveNameSync: 'GUARDAR',
+    pickNameTitle: '⚾ ELIGE TU NOMBRE',
+    pickNameDesc: 'Elige un nombre único para el Ranking Global (¡o genera uno al azar!):',
+    pickNameBtn: '¡A JUGAR!',
+    nameTaken: '❌ ¡Ese nombre ya existe — prueba otro o toca 🎲!',
+    nameTooShort: 'El nombre debe tener al menos 2 letras.',
   },
 };
 

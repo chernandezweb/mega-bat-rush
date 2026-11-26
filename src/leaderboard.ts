@@ -14,6 +14,12 @@ export interface LeaderboardResponse {
   yourRank: number | null;
 }
 
+export interface SubmitResult {
+  ok: boolean;
+  error?: 'NAME_TAKEN' | 'INVALID_NAME' | 'NETWORK';
+  data?: LeaderboardResponse;
+}
+
 const API_URL = 'https://mega-bat-rush.netlify.app/api/leaderboard';
 
 export async function fetchLeaderboard(playerId: string): Promise<LeaderboardResponse> {
@@ -23,22 +29,35 @@ export async function fetchLeaderboard(playerId: string): Promise<LeaderboardRes
   return (await res.json()) as LeaderboardResponse;
 }
 
-export async function submitLeaderboardScore(save: GameSave): Promise<LeaderboardResponse | null> {
-  if (save.bestDistance < 1) return null;
+export async function submitLeaderboardScore(
+  save: GameSave,
+  allowZeroDistance = false
+): Promise<SubmitResult> {
+  if (!allowZeroDistance && save.bestDistance < 1) return { ok: false };
+  const name = (save.playerName || '').trim();
+  if (name.length < 2) return { ok: false, error: 'INVALID_NAME' };
+
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         playerId: save.playerId,
-        name: save.playerName || 'Slugger',
+        name,
         distance: save.bestDistance,
         leagueTier: save.leagueTier,
       }),
     });
-    if (!res.ok) return null;
-    return (await res.json()) as LeaderboardResponse;
+    if (res.status === 409) {
+      return { ok: false, error: 'NAME_TAKEN' };
+    }
+    if (res.status === 400) {
+      return { ok: false, error: 'INVALID_NAME' };
+    }
+    if (!res.ok) return { ok: false, error: 'NETWORK' };
+    const data = (await res.json()) as LeaderboardResponse;
+    return { ok: true, data };
   } catch {
-    return null;
+    return { ok: false, error: 'NETWORK' };
   }
 }

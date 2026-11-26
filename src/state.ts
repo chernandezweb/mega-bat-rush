@@ -91,6 +91,7 @@ export interface Mission {
 export interface GameSave {
   playerId: string;
   playerName: string;
+  nameConfirmed: boolean;
   coins: number;
   gems: number;
   bestDistance: number;
@@ -369,10 +370,20 @@ function generatePlayerId(): string {
   return 'p_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 }
 
+export function generateRandomUsername(): string {
+  const adj = ['Turbo', 'Mega', 'Neon', 'Blaze', 'Sonic', 'Hyper', 'Gold', 'Cosmic', 'Flash', 'Titan', 'Nitro', 'Ace'];
+  const noun = ['Bat', 'Slugger', 'Homer', 'Crusher', 'Babe', 'Swing', 'Rocket', 'King', 'Star', 'Hitter', 'Bolt', 'Pro'];
+  const a = adj[Math.floor(Math.random() * adj.length)];
+  const n = noun[Math.floor(Math.random() * noun.length)];
+  const num = Math.floor(10 + Math.random() * 89);
+  return `${a}${n}${num}`.slice(0, 14);
+}
+
 export function createDefaultSave(): GameSave {
   return {
     playerId: generatePlayerId(),
-    playerName: 'Slugger',
+    playerName: '',
+    nameConfirmed: false,
     coins: 45,
     gems: 15,
     bestDistance: 0,
@@ -414,6 +425,10 @@ export function loadSave(): GameSave {
       ...def,
       ...parsed,
       playerId: typeof parsed.playerId === 'string' && parsed.playerId ? parsed.playerId : def.playerId,
+      nameConfirmed:
+        typeof parsed.nameConfirmed === 'boolean'
+          ? parsed.nameConfirmed
+          : Boolean(parsed.playerName && parsed.playerName !== 'Slugger'),
       ownedItems: Array.isArray(parsed.ownedItems) ? parsed.ownedItems : def.ownedItems,
       brokenWalls: Array.isArray(parsed.brokenWalls) ? parsed.brokenWalls : [],
       wallDamage: parsed.wallDamage && typeof parsed.wallDamage === 'object' ? parsed.wallDamage : {},

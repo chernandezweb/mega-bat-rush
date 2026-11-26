@@ -281,6 +281,20 @@
         <div class="quest-list" id="quest-list"></div>
       </div>
 
+      <!-- FIRST-TIME USERNAME PICKER MODAL -->
+      <div class="modal-panel hidden" id="modal-username">
+        <div class="modal-header">
+          <h2 id="un-title">⚾ CHOOSE YOUR NAME</h2>
+        </div>
+        <p class="modal-desc" id="un-desc">Pick a unique username for the Global Leaderboard (or roll a random one!):</p>
+        <div class="lb-name-bar">
+          <input type="text" id="un-input" maxlength="14" class="name-input lb-input" placeholder="Your Username" />
+          <button class="lb-refresh-btn" id="un-random-btn" title="Random Name">🎲</button>
+        </div>
+        <div class="un-error hidden" id="un-error"></div>
+        <button class="btn-continue" id="un-confirm-btn">LET'S PLAY!</button>
+      </div>
+
       <!-- GLOBAL LEADERBOARD MODAL -->
       <div class="modal-panel hidden" id="modal-leaderboard">
         <div class="modal-header">
@@ -289,9 +303,11 @@
         </div>
         <div class="lb-name-bar">
           <input type="text" id="lb-name-input" maxlength="14" class="name-input lb-input" placeholder="Your Name" />
+          <button class="lb-refresh-btn" id="lb-random-btn" title="Random Name">🎲</button>
           <button class="lb-save-btn" id="lb-save-btn">SAVE</button>
           <button class="lb-refresh-btn" id="lb-refresh-btn" title="Refresh">🔄</button>
         </div>
+        <div class="un-error hidden" id="lb-error"></div>
         <div class="lb-your-rank" id="lb-your-rank">YOUR RANK: —</div>
         <div class="lb-list" id="lb-list"></div>
       </div>
